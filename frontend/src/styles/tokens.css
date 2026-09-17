@@ -9,8 +9,8 @@
   --qc-dark-bg: #1c1a14;
   --qc-dark-sidebar: #231f16;
   --qc-dark-mid: #2e2a1e;
-  --text: #111111;
-  --border: #cfcfcf;
+  --text: #0f172a;
+  --border: #e6eaf0;
   --topbar-border: #e5e5e6;
   --focus: #d9bd7d;
   --stroke: #f2f2f2;
@@ -22,11 +22,13 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
+html { overflow-x: hidden; }
 body {
   font-family: var(--font-stack);
   background: var(--bg);
   color: var(--text);
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 a { color: inherit; }

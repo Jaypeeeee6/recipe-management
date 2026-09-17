@@ -328,7 +328,8 @@ class MealTrial(models.Model):
         if self.expires_at <= now:
             return "expired"
         remaining = self.expires_at - now
-        if remaining <= timedelta(days=10):
+        threshold = timedelta(hours=5) if self.expiry_unit == ExpiryUnit.HOURS else timedelta(days=1)
+        if remaining <= threshold:
             return "expiring_soon"
         return "valid"
 

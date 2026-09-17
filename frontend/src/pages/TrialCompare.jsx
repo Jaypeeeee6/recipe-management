@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/client";
+import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
 import { formatMoney, formatDate } from "../utils/format";
@@ -92,10 +93,11 @@ export default function TrialCompare() {
   );
   const [details, setDetails] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    api.get("/trials/?archived=false").then((r) => setCatalog(r.data));
+    api.get("/trials/?archived=false").then((r) => setCatalog(r.data)).finally(() => setCatalogLoading(false));
   }, []);
 
   useEffect(() => {
@@ -192,6 +194,10 @@ export default function TrialCompare() {
           )}
         </div>
         <div className="compare-pick-grid">
+          {catalogLoading ? (
+            <Skeleton count={6} />
+          ) : (
+            <>
           {filteredCatalog.map((t) => {
             const checked = selected.includes(t.id);
             const disabled = !checked && selected.length >= MAX_COMPARE;
@@ -212,13 +218,15 @@ export default function TrialCompare() {
             );
           })}
           {filteredCatalog.length === 0 && <div className="empty">No trials found.</div>}
+            </>
+          )}
         </div>
       </div>
 
       {selected.length < 2 && (
         <div className="empty">Select at least 2 trials to compare.</div>
       )}
-      {loading && <div className="empty">Loading comparison…</div>}
+      {loading && <Skeleton count={5} height={56} />}
 
       {!loading && details.length >= 2 && (
         <>

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import api from "../api/client";
+import Icon from "../components/Icon";
+import Skeleton from "../components/Skeleton";
 import { useAuth } from "../auth/AuthContext";
 import { canViewAudit } from "../utils/roles";
 import { formatDateTime } from "../utils/format";
@@ -11,6 +13,7 @@ export default function AuditLogs() {
   const [q, setQ] = useState("");
   const [action, setAction] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = () => {
     const params = new URLSearchParams();
@@ -22,7 +25,8 @@ export default function AuditLogs() {
         setItems(r.data);
         setError("");
       })
-      .catch(() => setError("Could not load audit logs."));
+      .catch(() => setError("Could not load audit logs."))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -64,11 +68,12 @@ export default function AuditLogs() {
             <option value="reject">Reject</option>
             <option value="clear_data">Clear data</option>
           </select>
-          <button className="btn btn-ghost" onClick={load}>Refresh</button>
+          <button className="btn btn-ghost" onClick={load}><Icon name="refresh" /> Refresh</button>
         </div>
 
         {error && <div className="empty">{error}</div>}
-        {!error && items.length === 0 && <div className="empty">No audit events yet.</div>}
+        {loading && !error && <Skeleton count={6} />}
+        {!loading && !error && items.length === 0 && <div className="empty">No audit events yet.</div>}
 
         {items.length > 0 && (
           <div className="table-wrap">

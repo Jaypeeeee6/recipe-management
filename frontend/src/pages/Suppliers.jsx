@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../api/client";
+import Icon, { IconAction } from "../components/Icon";
+import Skeleton from "../components/Skeleton";
 import Stars from "../components/Stars";
 
 const TYPES = [
@@ -15,8 +17,9 @@ export function SupplierList() {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [params] = useSearchParams();
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get("/suppliers/").then((r) => setItems(r.data));
+  const load = () => api.get("/suppliers/").then((r) => setItems(r.data)).finally(() => setLoading(false));
   useEffect(() => {
     load();
     if (params.get("q")) setQ(params.get("q"));
@@ -39,7 +42,7 @@ export function SupplierList() {
           <h1>Suppliers</h1>
           <p>Vendor directory for lab ingredients</p>
         </div>
-        <Link className="btn btn-primary" to="/suppliers/new">Add Supplier</Link>
+        <Link className="btn btn-add" to="/suppliers/new"><Icon name="plus" /> Add Supplier</Link>
       </div>
       <div className="card">
         <div className="toolbar">
@@ -48,9 +51,13 @@ export function SupplierList() {
             <input placeholder="Search suppliers…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
         </div>
-        {filtered.length === 0 && <div className="empty">No suppliers found.</div>}
-        <div className="table-wrap">
-          <table className="data">
+        {loading ? (
+          <Skeleton count={5} />
+        ) : (
+          <>
+            {filtered.length === 0 && <div className="empty">No suppliers found.</div>}
+            <div className="table-wrap">
+              <table className="data">
             <thead>
               <tr>
                 <th>Company</th>
@@ -71,14 +78,16 @@ export function SupplierList() {
                   <td style={{ textTransform: "capitalize" }}>{s.supplier_type}</td>
                   <td><Stars value={s.rating} /></td>
                   <td>{s.ingredient_count}</td>
-                  <td>
-                    <button className="icon-btn" onClick={() => remove(s)}>✕</button>
+                  <td className="row-actions">
+                    <IconAction name="trash" title="Delete" tone="danger" onClick={() => remove(s)} />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -99,9 +108,10 @@ export function SupplierForm() {
     notes: "",
     supplier_type: "food",
   });
+  const [loading, setLoading] = useState(!isNew);
 
   useEffect(() => {
-    if (!isNew) api.get(`/suppliers/${id}/`).then((r) => setForm(r.data));
+    if (!isNew) api.get(`/suppliers/${id}/`).then((r) => setForm(r.data)).finally(() => setLoading(false));
   }, [id, isNew]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -122,6 +132,9 @@ export function SupplierForm() {
         <h1>{isNew ? "Add Supplier" : "Edit Supplier"}</h1>
         <Link className="btn btn-back" to="/suppliers">Back</Link>
       </div>
+      {loading ? (
+        <div className="card card-pad"><Skeleton count={6} height={36} /></div>
+      ) : (
       <form className="card card-pad" onSubmit={save}>
         <div className="form-grid">
           <div className="field"><label>Company Name</label><input className="input" required value={form.company_name} onChange={(e) => set("company_name", e.target.value)} /></div>
@@ -147,6 +160,7 @@ export function SupplierForm() {
           <button className="btn btn-primary">Save</button>
         </div>
       </form>
+      )}
     </div>
   );
 }

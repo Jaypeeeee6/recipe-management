@@ -5,9 +5,20 @@ import { roleLabel } from "../utils/roles";
 
 function Icon({ d, size = 20 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d={d} />
     </svg>
+  );
+}
+
+function UserAvatar() {
+  return (
+    <span className="user-avatar-icon" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21a8 8 0 0 0-16 0" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    </span>
   );
 }
 
@@ -19,8 +30,9 @@ const NAV = [
   { to: "/products", label: "Products", d: "M12 17.3l6.18 3.7-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" },
   { to: "/reports", label: "Reports", d: "M4 19V5h16v14H4zm4-4h8M8 11h8" },
   { to: "/audit-logs", label: "Audit Logs", d: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4", roles: ["admin", "it"] },
-  { to: "/settings", label: "Settings", d: "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" },
 ];
+
+const SETTINGS_D = "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l.1.1a1.7 1.7 0 00-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z";
 
 export default function AppLayout({ children }) {
   const { user, logout } = useAuth();
@@ -46,7 +58,7 @@ export default function AppLayout({ children }) {
         </button>
         <NavLink to="/" className="brand-top">
           <img src="/maa-logo.png" alt="MAA" />
-          <span>Ingredient Lab</span>
+          <span>Recipe Management</span>
         </NavLink>
         <form className="topbar-search" onSubmit={onSearch}>
           <Icon d="M21 21l-4.3-4.3M10 18a8 8 0 100-16 8 8 0 000 16z" />
@@ -59,10 +71,11 @@ export default function AppLayout({ children }) {
         </form>
         <div className="top-actions">
           <div className="user-pill">
-            <div>
+            <UserAvatar />
+            <div className="user-meta">
               <div className="user-name">{user?.display_name}</div>
+              <span className="role-badge">{roleLabel(user?.role)}</span>
             </div>
-            <span className="role-badge">{roleLabel(user?.role)}</span>
           </div>
         </div>
       </header>
@@ -84,21 +97,41 @@ export default function AppLayout({ children }) {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <button
-            className="nav-item"
-            onClick={() => {
-              logout();
-              navigate("/login");
-            }}
-          >
-            <Icon d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-            <span>Logout</span>
-          </button>
+          <div className="settings-nav">
+            <NavLink
+              to="/settings"
+              className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+              onClick={() => setOpen(false)}
+            >
+              <Icon d={SETTINGS_D} size={18} />
+              <span>Settings</span>
+            </NavLink>
+          </div>
+          <div className="logout">
+            <button
+              type="button"
+              className="nav-item logout-item"
+              onClick={() => {
+                logout();
+                navigate("/login");
+              }}
+            >
+              <Icon d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" size={18} />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
       </aside>
 
       <div className="main">
-        <div className="content page-enter">{children}</div>
+        <div className="content">
+          <div key={location.pathname} className="page-enter">
+            {children}
+          </div>
+        </div>
+        <footer className="app-footer">
+          © 2026 Recipe Management System. All rights reserved. Developed by IT Department, MAA Group.
+        </footer>
       </div>
     </div>
   );

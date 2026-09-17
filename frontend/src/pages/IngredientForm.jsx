@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api/client";
+import Icon from "../components/Icon";
+import Skeleton from "../components/Skeleton";
 import Modal from "../components/Modal";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import StatusBadge from "../components/StatusBadge";
@@ -50,6 +52,7 @@ export default function IngredientForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmError, setConfirmError] = useState("");
   const [labUsers, setLabUsers] = useState([]);
+  const [loading, setLoading] = useState(!isNew);
 
   useEffect(() => {
     api.get("/categories/").then((r) => setCategories(r.data));
@@ -74,7 +77,7 @@ export default function IngredientForm() {
           price_per_unit: omrFieldValue(d.price_per_unit),
         });
         setHistory(d.price_history || []);
-      });
+      }).finally(() => setLoading(false));
     } else {
       setInitialSecret(false);
     }
@@ -265,15 +268,17 @@ export default function IngredientForm() {
           <div className="hint"><Link to="/ingredients">Ingredients</Link> / {isNew ? "Add" : form.name}</div>
           <h1>{isNew ? "Add Ingredient" : "Edit Ingredient"}</h1>
         </div>
-        <Link className="btn btn-back" to="/ingredients">Back</Link>
-        {!isNew && (
-          <div className="page-header-actions">
-            {canApprove && <button type="button" className="btn btn-primary" onClick={approve}>Approve</button>}
-            {canReject && <button type="button" className="btn btn-danger" onClick={() => setRejecting(true)}>Reject</button>}
-          </div>
-        )}
+        <div className="page-header-actions">
+          <Link className="btn btn-back" to="/ingredients">Back</Link>
+          {!isNew && canApprove && <button type="button" className="btn btn-primary" onClick={approve}><Icon name="check" /> Approve</button>}
+          {!isNew && canReject && <button type="button" className="btn btn-danger" onClick={() => setRejecting(true)}><Icon name="reject" /> Reject</button>}
+        </div>
       </div>
 
+      {loading ? (
+        <div className="card card-pad"><Skeleton count={8} height={36} /></div>
+      ) : (
+        <>
       {!isNew && form.is_trial && (
         <div className="card card-pad" style={{ marginBottom: 16 }}>
           <StatusBadge value={form.trial_status} />
@@ -525,7 +530,7 @@ export default function IngredientForm() {
           actions={
             <>
               <button className="btn btn-back" onClick={() => setRejecting(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={reject}>Reject</button>
+              <button className="btn btn-danger" onClick={reject}><Icon name="reject" /> Reject</button>
             </>
           }
         >
@@ -543,6 +548,8 @@ export default function IngredientForm() {
             <textarea className="textarea" value={rejectNotes} onChange={(e) => setRejectNotes(e.target.value)} />
           </div>
         </Modal>
+      )}
+        </>
       )}
     </div>
   );

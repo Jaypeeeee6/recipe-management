@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import api from "../api/client";
+import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
+import Skeleton from "../components/Skeleton";
 import { canClearData, canManageUsers, canViewAudit, canWrite, roleLabel } from "../utils/roles";
 
 const ROLES = [
@@ -19,12 +21,14 @@ export default function Settings() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ display_name: "", email: "", role: "staff", password: "" });
   const [toast, setToast] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = () => {
+    const requests = [api.get("/categories/").then((r) => setCategories(r.data))];
     if (canManageUsers(user)) {
-      api.get("/users/").then((r) => setUsers(r.data));
+      requests.push(api.get("/users/").then((r) => setUsers(r.data)));
     }
-    api.get("/categories/").then((r) => setCategories(r.data));
+    Promise.all(requests).finally(() => setLoading(false));
   };
   useEffect(load, [user]);
 
@@ -76,7 +80,7 @@ export default function Settings() {
           <p>Users, roles, categories, and system tools</p>
         </div>
         <div className="page-header-actions">
-          {canViewAudit(user) && <Link className="btn btn-gold" to="/audit-logs">Audit Logs</Link>}
+          {canViewAudit(user) && <Link className="btn btn-gold" to="/audit-logs"><Icon name="clipboard" /> Audit Logs</Link>}
         </div>
       </div>
 
@@ -92,22 +96,26 @@ export default function Settings() {
         <div className="card card-pad" style={{ marginBottom: 16 }}>
           <div className="page-header" style={{ marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>User Management</h3>
-            <button className="btn btn-primary" onClick={openNew}>Add User</button>
+            <button className="btn btn-add" onClick={openNew}><Icon name="plus" /> Add User</button>
           </div>
           <table className="data">
             <thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
             <tbody>
-              {users.map((u) => (
+              {loading ? (
+                <tr><td colSpan="4"><Skeleton count={4} /></td></tr>
+              ) : (
+                users.map((u) => (
                 <tr key={u.id}>
                   <td>{u.display_name}</td>
                   <td>{u.email}</td>
                   <td>{roleLabel(u.role)}</td>
-                  <td>
-                    <button className="btn btn-ghost" onClick={() => openEdit(u)}>Edit</button>
-                    <button className="icon-btn" onClick={() => deleteUser(u)}>✕</button>
+                  <td className="row-actions">
+                    <IconAction name="edit" title="Edit" onClick={() => openEdit(u)} />
+                    <IconAction name="trash" title="Delete" tone="danger" onClick={() => deleteUser(u)} />
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -116,9 +124,9 @@ export default function Settings() {
       <div className="card card-pad" style={{ marginBottom: 16 }}>
         <div className="page-header" style={{ marginBottom: 8 }}>
           <h3 style={{ margin: 0 }}>Categories</h3>
-          {canWrite(user) && <button className="btn btn-ghost" onClick={addCategory}>Add</button>}
+          {canWrite(user) && <button className="btn btn-ghost" onClick={addCategory}><Icon name="plus" /> Add</button>}
         </div>
-        {categories.map((c) => (
+        {loading ? <Skeleton count={4} /> : categories.map((c) => (
           <div className="list-row" key={c.id}>
             <span>{c.name}</span>
             <span className="badge badge-gold">{c.code_prefix}</span>
@@ -137,7 +145,7 @@ export default function Settings() {
         <div className="card card-pad">
           <h3>Clear All Data</h3>
           <p className="hint">Permanently delete operational records. Users and categories are kept.</p>
-          <button className="btn btn-danger" onClick={clearData}>Clear All Data</button>
+          <button className="btn btn-danger" onClick={clearData}><Icon name="trash" /> Clear All Data</button>
         </div>
       )}
 

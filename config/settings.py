@@ -1,4 +1,4 @@
-"""Django settings for MAA Recipe & Ingredient Lab."""
+"""Django settings for Recipe Management System."""
 
 from datetime import timedelta
 from pathlib import Path

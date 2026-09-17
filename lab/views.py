@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db.models import Avg, Count, Q
+from django.db.models.functions import TruncMonth, TruncWeek
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -16,6 +17,7 @@ from .models import (
     AuditLog,
     Category,
     CommitteeRating,
+    ExpiryUnit,
     Ingredient,
     IngredientPriceHistory,
     MealTrial,
@@ -600,9 +602,7 @@ def me_view(request):
 @api_view(["GET"])
 def dashboard_view(request):
     expire_overdue_trials()
-    sync_all_approved_trials()
     today = timezone.localdate()
-    soon = today + timedelta(days=30)
     ingredients = Ingredient.objects.select_related("category", "supplier")
     visibility = visible_ingredients_q(request.user)
     if visibility:
@@ -611,11 +611,6 @@ def dashboard_view(request):
     completed = trials.filter(status="completed")
     success_avg = completed.aggregate(avg=Avg("success_rate"))["avg"] or 0
 
-    expiring = [
-        IngredientListSerializer(i, context={"request": request}).data
-        for i in ingredients.filter(expiry_date__isnull=False, expiry_date__lte=soon)
-        if i.expiry_status != "valid" or i.days_to_expiry is not None and i.days_to_expiry <= 30
-    ]
     low_stock = [
         IngredientListSerializer(i, context={"request": request}).data
         for i in ingredients
@@ -624,78 +619,243 @@ def dashboard_view(request):
 
     recent = MealTrialListSerializer(
         trials.exclude(trial_archive_q())
+        .select_related("supplier")
+        .prefetch_related("committee_ratings")
         .annotate(ingredient_count=Count("ingredients"))
         .order_by("-trial_date", "-id")[:8],
         many=True,
     ).data
 
-    trial_qs = (
+    now = timezone.now()
+    expiring_window = Q(expiry_unit=ExpiryUnit.HOURS, expires_at__lte=now + timedelta(hours=5)) | (
+        ~Q(expiry_unit=ExpiryUnit.HOURS) & Q(expires_at__lte=now + timedelta(days=1))
+    )
+    expiring_trials_qs = (
         trials.exclude(trial_archive_q())
+        .filter(expires_at__isnull=False, expires_at__gt=now)
+        .filter(expiring_window)
+        .select_related("supplier")
+        .prefetch_related("committee_ratings")
         .annotate(ingredient_count=Count("ingredients", distinct=True))
         .order_by("expires_at")
     )
-    expiring_trials = [
-        MealTrialListSerializer(t, context={"request": request}).data
-        for t in trial_qs
-        if t.expires_at and t.expiry_status in ("expired", "expiring_soon")
-    ][:12]
+    expiring_trials = MealTrialListSerializer(
+        expiring_trials_qs, many=True, context={"request": request}
+    ).data
 
-    by_category = []
-    for cat in Category.objects.all():
-        cat_trials = completed.filter(ingredients__category=cat).distinct()
-        avg = cat_trials.aggregate(avg=Avg("success_rate"))["avg"]
-        by_category.append(
-            {"category": cat.name, "success_rate": round(avg, 1) if avg is not None else 0, "count": cat_trials.count()}
-        )
-
-    verdict_counts = {
-        "suitable": completed.filter(verdict=Verdict.SUITABLE).count(),
-        "not_suitable": completed.filter(verdict=Verdict.NOT_SUITABLE).count(),
-        "pending": trials.filter(verdict=Verdict.PENDING).count(),
-        "emergency_substitute": completed.filter(verdict=Verdict.EMERGENCY).count(),
+    trial_years = {
+        y
+        for y in trials.exclude(trial_date__isnull=True).dates("trial_date", "year")
+        if y
     }
+    available_years = sorted({d.year for d in trial_years} | {today.year}, reverse=True)
+    earliest_year = min(available_years) if available_years else today.year
 
-    # last 14 days trial counts
-    timeline = []
-    for i in range(13, -1, -1):
-        d = today - timedelta(days=i)
-        timeline.append({"date": d.isoformat(), "count": trials.filter(trial_date=d).count()})
+    MONTH_LABELS = (
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    )
 
-    # last 30 days: approved & rejected counts by trial date
-    verdicts_over_time = []
-    for i in range(29, -1, -1):
-        d = today - timedelta(days=i)
-        day_qs = trials.filter(trial_date=d)
-        verdicts_over_time.append(
-            {
-                "date": d.isoformat(),
-                "approved": day_qs.filter(verdict=Verdict.SUITABLE).count(),
-                "rejected": day_qs.filter(verdict=Verdict.NOT_SUITABLE).count(),
-            }
+    def _monday_of(day):
+        return day - timedelta(days=day.weekday())
+
+    def _parse_grain(value):
+        return value if value in ("year", "month", "week") else "week"
+
+    def _year_bounds(year):
+        start = date(year, 1, 1)
+        end = min(date(year, 12, 31), today) if year == today.year else date(year, 12, 31)
+        if end < start:
+            end = start
+        return start, end
+
+    def _month_bounds(year, month):
+        start = date(year, month, 1)
+        if month == 12:
+            end = date(year, 12, 31)
+        else:
+            end = date(year, month + 1, 1) - timedelta(days=1)
+        if year == today.year and month == today.month:
+            end = today
+        if end < start:
+            end = start
+        return start, end
+
+    def _week_bounds(start):
+        end = start + timedelta(days=6)
+        if end > today:
+            end = today
+        if end < start:
+            end = start
+        return start, end
+
+    def _chart_months():
+        options = []
+        year = earliest_year
+        while year <= today.year:
+            last_month = today.month if year == today.year else 12
+            for month in range(1, last_month + 1):
+                value = f"{year:04d}-{month:02d}"
+                options.append(
+                    {
+                        "value": value,
+                        "label": f"{MONTH_LABELS[month - 1]} {year}",
+                    }
+                )
+            year += 1
+        options.reverse()
+        return options
+
+    def _chart_weeks():
+        options = []
+        week_start = _monday_of(today)
+        earliest = date(earliest_year, 1, 1)
+        while week_start >= earliest and len(options) < 52:
+            week_end = min(week_start + timedelta(days=6), today)
+            if week_start.year == week_end.year and week_start.month == week_end.month:
+                label = f"{week_start.day}–{week_end.day} {MONTH_LABELS[week_start.month - 1]}"
+            elif week_start.year == week_end.year:
+                label = (
+                    f"{week_start.day} {MONTH_LABELS[week_start.month - 1]}"
+                    f" – {week_end.day} {MONTH_LABELS[week_end.month - 1]}"
+                )
+            else:
+                label = (
+                    f"{week_start.day} {MONTH_LABELS[week_start.month - 1]} {week_start.year}"
+                    f" – {week_end.day} {MONTH_LABELS[week_end.month - 1]} {week_end.year}"
+                )
+            options.append({"value": week_start.isoformat(), "label": label})
+            week_start -= timedelta(days=7)
+        return options
+
+    chart_months = _chart_months()
+    chart_weeks = _chart_weeks()
+    month_values = {opt["value"] for opt in chart_months}
+    week_values = {opt["value"] for opt in chart_weeks}
+    default_month = f"{today.year:04d}-{today.month:02d}"
+    default_week = _monday_of(today).isoformat()
+
+    def _parse_period(grain, value):
+        raw = (value or "").strip()
+        if grain == "year":
+            try:
+                year = int(raw)
+            except (TypeError, ValueError):
+                return str(today.year)
+            return str(year if year in available_years else today.year)
+        if grain == "month":
+            if raw in month_values:
+                return raw
+            return default_month if default_month in month_values else (chart_months[0]["value"] if chart_months else default_month)
+        if raw in week_values:
+            return raw
+        return default_week if default_week in week_values else (chart_weeks[0]["value"] if chart_weeks else default_week)
+
+    def _annotate_counts(qs):
+        return qs.annotate(
+            count=Count("id"),
+            approved=Count("id", filter=Q(verdict=Verdict.SUITABLE)),
+            rejected=Count("id", filter=Q(verdict=Verdict.NOT_SUITABLE)),
         )
 
-    trial_durations = [
-        {
-            "id": t.id,
-            "code": t.code,
-            "title": t.title,
-            "trial_date": t.trial_date.isoformat() if t.trial_date else None,
-            "duration_minutes": t.cooking_duration,
-        }
-        for t in trials.filter(trial_date__isnull=False).order_by("trial_date", "id")
-    ]
+    def _daily_range(start, end):
+        rows = _annotate_counts(
+            trials.filter(trial_date__gte=start, trial_date__lte=end).values("trial_date")
+        )
+        by_date = {row["trial_date"]: row for row in rows}
+        out = []
+        day = start
+        while day <= end:
+            row = by_date.get(day) or {}
+            out.append(
+                {
+                    "date": day.isoformat(),
+                    "count": row.get("count", 0),
+                    "approved": row.get("approved", 0),
+                    "rejected": row.get("rejected", 0),
+                }
+            )
+            day += timedelta(days=1)
+        return out
 
-    top_rated = ProductEvaluation.objects.order_by("-avg_rating")[:5]
-    expiry_timeline = []
-    for i in ingredients.filter(expiry_date__isnull=False).order_by("expiry_date")[:12]:
-        expiry_timeline.append(
+    def _month_series(year):
+        start, end = _year_bounds(year)
+        rows = _annotate_counts(
+            trials.filter(trial_date__gte=start, trial_date__lte=end)
+            .annotate(month=TruncMonth("trial_date"))
+            .values("month")
+        )
+        by_month = {}
+        for row in rows:
+            key = row["month"]
+            if hasattr(key, "date"):
+                key = key.date()
+            by_month[date(key.year, key.month, 1)] = row
+        out = []
+        month = date(year, 1, 1)
+        while month <= end:
+            row = by_month.get(month) or {}
+            out.append(
+                {
+                    "date": month.isoformat(),
+                    "count": row.get("count", 0),
+                    "approved": row.get("approved", 0),
+                    "rejected": row.get("rejected", 0),
+                }
+            )
+            if month.month == 12:
+                break
+            month = date(year, month.month + 1, 1)
+        return out
+
+    def _series_for(grain, period):
+        if grain == "year":
+            return _month_series(int(period))
+        if grain == "month":
+            year, month = period.split("-")
+            start, end = _month_bounds(int(year), int(month))
+            return _daily_range(start, end)
+        start = date.fromisoformat(period)
+        start, end = _week_bounds(start)
+        return _daily_range(start, end)
+
+    trials_grain = _parse_grain(request.query_params.get("trials_grain"))
+    verdicts_grain = _parse_grain(request.query_params.get("verdicts_grain"))
+    trials_period = _parse_period(trials_grain, request.query_params.get("trials_period") or request.query_params.get("trials_year"))
+    verdicts_period = _parse_period(verdicts_grain, request.query_params.get("verdicts_period") or request.query_params.get("verdicts_year"))
+
+    if trials_grain == verdicts_grain and trials_period == verdicts_period:
+        shared = _series_for(trials_grain, trials_period)
+        timeline = verdicts_over_time = shared
+    else:
+        timeline = _series_for(trials_grain, trials_period)
+        verdicts_over_time = _series_for(verdicts_grain, verdicts_period)
+
+    duration_by_week = []
+    week_rows = (
+        trials.filter(trial_date__isnull=False, cooking_duration__isnull=False)
+        .annotate(week=TruncWeek("trial_date"))
+        .values("week")
+        .annotate(duration=Avg("cooking_duration"))
+        .order_by("week")
+    )
+    for row in list(week_rows)[-12:]:
+        week = row["week"]
+        if hasattr(week, "date"):
+            week = week.date()
+        duration_by_week.append({"date": week.isoformat(), "duration": round(row["duration"] or 0)})
+
+    recent_products = []
+    for product in ProductEvaluation.objects.prefetch_related("ingredients").order_by("-created_at", "-id")[:8]:
+        ingredients_list = list(product.ingredients.all())
+        recent_products.append(
             {
-                "id": i.id,
-                "name": i.name,
-                "code": i.code,
-                "expiry_date": i.expiry_date.isoformat() if i.expiry_date else None,
-                "status": i.expiry_status,
-                "days": i.days_to_expiry,
+                "id": product.id,
+                "product_name": product.product_name,
+                "created_at": product.created_at.isoformat() if product.created_at else None,
+                "avg_success_rate": product.avg_success_rate,
+                "avg_rating": product.avg_rating,
+                "ingredient_titles": [{"id": i.id, "name": i.name} for i in ingredients_list],
             }
         )
 
@@ -709,17 +869,20 @@ def dashboard_view(request):
                 "today_trials": trials.filter(trial_date=today).count(),
                 "expiring_trials": len(expiring_trials),
             },
-            "expiring": expiring,
             "low_stock": low_stock,
             "recent_trials": recent,
             "expiring_trials": expiring_trials,
-            "success_by_category": by_category,
-            "verdict_breakdown": verdict_counts,
             "trials_over_time": timeline,
             "verdicts_over_time": verdicts_over_time,
-            "trial_durations": trial_durations,
-            "top_rated": ProductEvaluationSerializer(top_rated, many=True).data,
-            "expiry_timeline": expiry_timeline,
+            "chart_years": available_years,
+            "chart_months": chart_months,
+            "chart_weeks": chart_weeks,
+            "trials_grain": trials_grain,
+            "verdicts_grain": verdicts_grain,
+            "trials_period": trials_period,
+            "verdicts_period": verdicts_period,
+            "duration_by_week": duration_by_week,
+            "recent_products": recent_products,
         }
     )
 

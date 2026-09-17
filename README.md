@@ -1,6 +1,6 @@
-# MAA Recipe & Ingredient Lab
+# Recipe Management System
 
-R&D lab for ingredients, meal trials, costing, and tasting-committee ratings. Features follow the [Ingredient & Meal Trial Lab](https://maa-ingredient-lab.netlify.app/) product, with visual design aligned to MAA Inventory. English only.
+Recipe, ingredient, meal trial, costing, and tasting-committee ratings system. Visual design is aligned to MAA Inventory. English only.
 
 ## Tech stack
 

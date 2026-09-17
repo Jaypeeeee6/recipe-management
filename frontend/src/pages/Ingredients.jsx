@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Modal from "../components/Modal";
+import Icon, { IconAction } from "../components/Icon";
+import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import { formatDate, formatMoney } from "../utils/format";
+import { exportIngredientsPdf } from "../utils/ingredientExport";
 import { canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 
@@ -31,6 +34,7 @@ export default function Ingredients() {
   const [reason, setReason] = useState("taste");
   const [notes, setNotes] = useState("");
   const [toast, setToast] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = (activeTab = tab) => {
     const query = new URLSearchParams({ tab: activeTab });
@@ -38,7 +42,7 @@ export default function Ingredients() {
     if (supplier) query.set("supplier", supplier);
     if (status) query.set("status", status);
     if (q) query.set("search", q);
-    api.get(`/ingredients/?${query}`).then((res) => setItems(res.data));
+    api.get(`/ingredients/?${query}`).then((res) => setItems(res.data)).finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -74,26 +78,25 @@ export default function Ingredients() {
 
   const renderActions = (i) => (
     <td className="row-actions">
-      <Link className="btn btn-ghost" to={`/ingredients/${i.id}`}>View</Link>
       {canApproveIngredient(i) && (
-        <button className="btn btn-primary" onClick={() => approve(i.id)}>Approve</button>
+        <IconAction name="check" title="Approve" tone="ok" onClick={() => approve(i.id)} />
       )}
       {canRejectIngredient(i) && (
-        <button className="btn btn-danger" onClick={() => setRejecting(i)}>Reject</button>
+        <IconAction name="reject" title="Reject" tone="danger" onClick={() => setRejecting(i)} />
       )}
-      <button className="icon-btn" onClick={() => remove(i)} title="Delete">✕</button>
+      <IconAction name="trash" title="Delete" tone="danger" onClick={() => remove(i)} />
     </td>
   );
 
   const renderCardActions = (i) => (
     <div className="row-actions" style={{ marginTop: 12 }}>
-      <Link className="btn btn-ghost" to={`/ingredients/${i.id}`}>View</Link>
       {canApproveIngredient(i) && (
-        <button className="btn btn-primary" onClick={() => approve(i.id)}>Approve</button>
+        <IconAction name="check" title="Approve" tone="ok" onClick={() => approve(i.id)} />
       )}
       {canRejectIngredient(i) && (
-        <button className="btn btn-danger" onClick={() => setRejecting(i)}>Reject</button>
+        <IconAction name="reject" title="Reject" tone="danger" onClick={() => setRejecting(i)} />
       )}
+      <IconAction name="trash" title="Delete" tone="danger" onClick={() => remove(i)} />
     </div>
   );
 
@@ -130,6 +133,35 @@ export default function Ingredients() {
     load();
   };
 
+  const exportPdf = () => {
+    const categoryLabel = category
+      ? categories.find((c) => String(c.id) === String(category))?.name
+      : "";
+    const supplierLabel = supplier
+      ? suppliers.find((s) => String(s.id) === String(supplier))?.company_name
+      : "";
+    const statusLabels = {
+      valid: "Valid",
+      expiring_soon: "Expiring Soon",
+      expired: "Expired",
+    };
+    try {
+      exportIngredientsPdf({
+        items: filtered,
+        grouped,
+        filters: {
+          tabLabel: tab === "trial" ? "Pending / Rejected" : "Approved Ingredients",
+          search: q.trim(),
+          categoryLabel,
+          supplierLabel,
+          statusLabel: statusLabels[status] || "",
+        },
+      });
+    } catch {
+      alert("Could not export ingredients.");
+    }
+  };
+
   return (
     <div>
       {toast && <div className="toast">{toast}</div>}
@@ -139,35 +171,48 @@ export default function Ingredients() {
           <p>Review trial products, then approve or reject for production use</p>
         </div>
         <div className="page-header-actions">
+          <button
+            type="button"
+            className="btn btn-gold"
+            onClick={exportPdf}
+            disabled={loading || filtered.length === 0}
+          >
+            <Icon name="download" />
+            Export PDF
+          </button>
           {canWrite(user) && (
-            <Link className="btn btn-primary" to="/ingredients/new">
+            <Link className="btn btn-add" to="/ingredients/new">
+              <Icon name="plus" />
               {tab === "trial" ? "Add Trial Product" : "Add Ingredient"}
             </Link>
           )}
         </div>
       </div>
 
+      <div className="tabs">
+        <button
+          type="button"
+          className={`tab ${tab === "approved" ? "active" : ""}`}
+          onClick={() => {
+            setTab("approved");
+            setSearchParams({ tab: "approved" });
+          }}
+        >
+          Approved Ingredients
+        </button>
+        <button
+          type="button"
+          className={`tab ${tab === "trial" ? "active" : ""}`}
+          onClick={() => {
+            setTab("trial");
+            setSearchParams({ tab: "trial" });
+          }}
+        >
+          Pending / Rejected
+        </button>
+      </div>
+
       <div className="card">
-        <div className="tabs">
-          <button
-            className={`tab ${tab === "approved" ? "active" : ""}`}
-            onClick={() => {
-              setTab("approved");
-              setSearchParams({ tab: "approved" });
-            }}
-          >
-            Approved Ingredients
-          </button>
-          <button
-            className={`tab ${tab === "trial" ? "active" : ""}`}
-            onClick={() => {
-              setTab("trial");
-              setSearchParams({ tab: "trial" });
-            }}
-          >
-            Pending / Rejected
-          </button>
-        </div>
         <div className="toolbar">
           <div className="search-field">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 21l-4.3-4.3M10 18a8 8 0 100-16 8 8 0 000 16z" /></svg>
@@ -193,11 +238,12 @@ export default function Ingredients() {
             <option value="expired">Expired</option>
           </select>
           <button className="btn btn-ghost" onClick={() => setView(view === "table" ? "card" : "table")}>
+            <Icon name="layout" />
             {view === "table" ? "Card View" : "Table View"}
           </button>
         </div>
 
-        {filtered.length === 0 && <div className="empty">{tab === "trial" ? "No trial products yet." : "No ingredients found."}</div>}
+        {loading ? <Skeleton count={6} /> : filtered.length === 0 && <div className="empty">{tab === "trial" ? "No trial products yet." : "No ingredients found."}</div>}
 
         {view === "table" && filtered.length > 0 && grouped.map((section) => (
           <section key={section.name} className="ingredient-section">
@@ -300,7 +346,7 @@ export default function Ingredients() {
           actions={
             <>
               <button className="btn btn-back" onClick={() => setRejecting(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={reject}>Reject</button>
+              <button className="btn btn-danger" onClick={reject}><Icon name="reject" /> Reject</button>
             </>
           }
         >

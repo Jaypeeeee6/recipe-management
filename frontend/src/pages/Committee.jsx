@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
+import Skeleton from "../components/Skeleton";
 import Stars from "../components/Stars";
 
 const emptyRatings = { taste: 0, texture: 0, cost: 0, consistency: 0, overall: 0 };
@@ -49,14 +50,16 @@ export default function Committee() {
   };
 
   return (
-    <div className="committee-page">
+    <div className="committee-page page-enter">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, maxWidth: 420, width: "100%" }}>
         <img src="/maa-logo.png" alt="" style={{ height: 40 }} />
         <div>
-          <strong>Ingredient & Meal Trial Lab</strong>
-          <div className="hint">Central Kitchen — R&D Lab</div>
+          <strong>Recipe Management System</strong>
+          <div className="hint">Tasting Committee</div>
         </div>
       </div>
+
+      {step !== "error" && step !== "done" && !trial && <Skeleton count={4} height={56} />}
 
       {step === "error" && (
         <div className="committee-card" style={{ padding: 32, textAlign: "center" }}>
@@ -137,9 +140,12 @@ export default function Committee() {
           <h2>Thank You!</h2>
           <p>Your rating has been recorded successfully. We appreciate your valuable contribution.</p>
           <p>🌟 Your opinion makes a difference</p>
-          <p className="hint">Ingredient Lab — MAA Group</p>
+          <p className="hint">Recipe Management System — MAA Group</p>
         </div>
       )}
+      <footer className="app-footer">
+        © 2026 Recipe Management System. All rights reserved. Developed by IT Department, MAA Group.
+      </footer>
     </div>
   );
 }

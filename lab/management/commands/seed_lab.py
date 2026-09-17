@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
@@ -14,6 +14,7 @@ from lab.models import (
     ProductEvaluation,
     RecipeLine,
     Recommendation,
+    RejectionReason,
     Role,
     Supplier,
     SupplierType,
@@ -21,10 +22,177 @@ from lab.models import (
     UserProfile,
     Verdict,
 )
+from lab.utils import sync_all_approved_trials
 
 
 def d(offset):
     return (timezone.localdate() + timedelta(days=offset))
+
+
+SAMPLE_MEALS = [
+    ("Crispy chicken burger", "1.300"),
+    ("Coleslaw chicken burger", "1.300"),
+    ("Spicy chicken burger", "1.300"),
+    ("Kids chicken meal", "1.000"),
+    ("Fried chicken bucket", "1.000"),
+    ("Chicken cheese burger", "1.300"),
+    ("Beef burger", "1.300"),
+    ("Loaded fries", "1.100"),
+    ("Crispy chicken fries", "2.000"),
+    ("Shawarma fries", "1.500"),
+    ("Spicy steak fries", "1.500"),
+    ("Twisted fries", "1.500"),
+    ("Crispy shrimp fries", "3.000"),
+    ("Seasoned fries", "0.500"),
+    ("Cheese fries", "0.800"),
+    ("Spicy shrimp", "2.500"),
+    ("Spicy crispy chicken", "1.500"),
+    ("Creamy pasta", "1.800"),
+    ("Shrimp marinara pasta", "2.200"),
+    ("Popcorn chicken", "0.900"),
+    ("Steak pasta", "1.800"),
+    ("Lemon mint juice", "1.000"),
+    ("Blue milkshake", "1.000"),
+    ("Mini pancakes", "1.400"),
+    ("Pancakes", "1.400"),
+    ("Chocolate stick dessert", "2.000"),
+    ("Chocolate cup", "1.400"),
+]
+
+SAMPLE_CHEFS = ["Chef Salim", "Chef Mariam", "Chef Yusuf", "Chef Aisha"]
+
+
+def _iter_days(start, end):
+    day = start
+    while day <= end:
+        yield day
+        day += timedelta(days=1)
+
+
+def _day_plan(day, today):
+    """Return (kind, count) so some days have 4 approvals and some have 4 rejections."""
+    delta = (today - day).days
+    weekday = day.weekday()
+    week = day.isocalendar()[1]
+    if 0 <= delta <= 13:
+        return [
+            ("approved", 4),
+            ("mixed", 2),
+            ("rejected", 4),
+            ("none", 0),
+            ("approved", 4),
+            ("mixed", 1),
+            ("rejected", 4),
+            ("none", 0),
+            ("approved", 4),
+            ("mixed", 2),
+            ("rejected", 4),
+            ("none", 0),
+            ("approved", 4),
+            ("mixed", 2),
+        ][delta]
+    if week % 6 == 0:
+        return "none", 0
+    if weekday not in (0, 2, 4):
+        return "none", 0
+    if weekday == 2 and week % 4 == 0:
+        return "approved", 4
+    if weekday == 4 and week % 4 == 2:
+        return "rejected", 4
+    if week % 4 == 1:
+        return "mixed", 2
+    return "mixed", 1
+
+
+def _slot_verdict(kind, slot, seq):
+    if kind == "approved":
+        return Verdict.SUITABLE
+    if kind == "rejected":
+        return Verdict.NOT_SUITABLE
+    if slot == 0:
+        return Verdict.SUITABLE
+    if seq % 9 == 0:
+        return Verdict.EMERGENCY
+    if seq % 11 == 0:
+        return Verdict.PENDING
+    return Verdict.NOT_SUITABLE
+
+
+def seed_chart_trials(suppliers, ings):
+    """Add dated trials so dashboard charts have a readable 4-up / 4-down shape."""
+    MealTrial.objects.filter(code__startswith="SMP-").delete()
+    supplier_list = list(suppliers.values())
+    ing_list = list(ings.values())
+    today = timezone.localdate()
+    created = 0
+    ranges = [
+        (date(2025, 1, 6), date(2025, 12, 19)),
+        (date(2026, 1, 5), today),
+    ]
+    for start, end in ranges:
+        seq = 0
+        for day in _iter_days(start, end):
+            kind, per_day = _day_plan(day, today)
+            if kind == "none" or per_day <= 0:
+                continue
+            for slot in range(per_day):
+                seq += 1
+                created += 1
+                code = f"SMP-{day.year}-{seq:03d}"
+                meal, price = SAMPLE_MEALS[(seq + slot) % len(SAMPLE_MEALS)]
+                chef = SAMPLE_CHEFS[(seq + day.weekday()) % len(SAMPLE_CHEFS)]
+                verdict = _slot_verdict(kind, slot, seq)
+                if verdict == Verdict.SUITABLE:
+                    status = TrialStatus.COMPLETED
+                    success = 78 + ((seq * 3) % 21)
+                    reason = ""
+                    notes = "Committee approved. Ready to move toward production."
+                elif verdict == Verdict.NOT_SUITABLE:
+                    status = TrialStatus.COMPLETED
+                    success = 38 + ((seq * 5) % 28)
+                    reason = (RejectionReason.TASTE, RejectionReason.PRICE, RejectionReason.OTHER)[slot % 3]
+                    notes = "Did not meet the standard. Archived after committee review."
+                elif verdict == Verdict.EMERGENCY:
+                    status = TrialStatus.COMPLETED
+                    success = 70 + (seq % 12)
+                    reason = ""
+                    notes = "Approved as an emergency substitute only."
+                else:
+                    status = TrialStatus.DRAFT
+                    success = 0
+                    reason = ""
+                    notes = "Awaiting committee tasting."
+                trial, _ = MealTrial.objects.update_or_create(
+                    code=code,
+                    defaults={
+                        "title": meal,
+                        "supplier": supplier_list[seq % len(supplier_list)],
+                        "trial_date": day,
+                        "conducted_by": chef,
+                        "success_rate": success,
+                        "taste": 2 + (seq % 4),
+                        "texture": 2 + ((seq + 1) % 4),
+                        "cost": 2 + ((seq + 2) % 4),
+                        "consistency": 2 + ((seq + 3) % 4),
+                        "overall": 2 + ((seq + day.weekday()) % 4),
+                        "verdict": verdict,
+                        "status": status,
+                        "rejection_reason": reason,
+                        "rejection_notes": notes if verdict == Verdict.NOT_SUITABLE else "",
+                        "servings": 1,
+                        "selling_price": Decimal(price) if verdict == Verdict.SUITABLE else None,
+                        "cooking_temperature": 180 + (seq % 50),
+                        "cooking_duration": 8 + (seq % 28),
+                        "repetition_number": 1 + (slot % 3),
+                        "expiry_amount": None,
+                        "expiry_unit": "days",
+                        "notes": notes,
+                    },
+                )
+                if ing_list:
+                    start_i = seq % len(ing_list)
+                    trial.ingredients.set(ing_list[start_i:start_i + 4] or ing_list[:4])
+    return created
 
 
 class Command(BaseCommand):
@@ -132,10 +300,10 @@ class Command(BaseCommand):
             dict(code="FL-001", name="Premium Bread Flour", category="Flour", supplier="s2", batch="GML-FL-2026-B1", expiry=90, received=-15, unit="kg", qty=80, par=50, price="0.850", notes="High-gluten flour, ideal for burger buns.", storage="Dry, cool area <25°C", history=[("0.750", -90), ("0.800", -60)]),
             dict(code="DY-001", name="Cheddar Cheese Slices", category="Dairy", supplier="s3", batch="AMZ-CHE-2026-C1", expiry=20, received=-10, unit="kg", qty=8, par=10, price="6.000", notes="Pre-sliced, consistent melt.", storage="2–4°C refrigerated", history=[("5.500", -60)]),
             dict(code="DY-002", name="Butter (Unsalted)", category="Dairy", supplier="s3", batch="AMZ-BUT-2026-C2", expiry=12, received=-18, unit="kg", qty=12, par=5, price="7.000", notes="For bun dough enrichment.", storage="2–4°C refrigerated"),
-            dict(code="SP-001", name="Smoked Paprika", category="Spice", supplier="s4", batch="SPR-PAP-2026-D1", expiry=300, received=-40, unit="kg", qty=5, par=2, price="8.000", notes="Key spice for Boom Burger seasoning.", storage="Airtight, cool, dry", history=[("7.500", -120)]),
+            dict(code="SP-001", name="Smoked Paprika", category="Spice", supplier="s4", batch="SPR-PAP-2026-D1", expiry=300, received=-40, unit="kg", qty=5, par=2, price="8.000", notes="Key spice for beef burger seasoning.", storage="Airtight, cool, dry", history=[("7.500", -120)]),
             dict(code="SP-002", name="Black Pepper (Ground)", category="Spice", supplier="s4", batch="SPR-BPP-2026-D2", expiry=365, received=-30, unit="kg", qty=4, par=2, price="5.000", notes="Fine ground, for patty seasoning.", storage="Airtight container"),
             dict(code="SP-003", name="Salt (Fine)", category="Spice", supplier="s4", batch="SPR-SLT-2026-D3", expiry=730, received=-60, unit="kg", qty=20, par=5, price="0.300", notes="Iodized fine salt.", storage="Airtight, dry"),
-            dict(code="SC-001", name="Boom Special Sauce", category="Sauce", supplier="s6", batch="SWD-BSS-2026-E1", expiry=120, received=-10, unit="L", qty=25, par=10, price="2.000", notes="Proprietary blend. Refrigerate after opening.", storage="2–8°C after opening", secret=True, shelf=14, history=[("1.800", -90)]),
+            dict(code="SC-001", name="House Special Sauce", category="Sauce", supplier="s6", batch="SWD-BSS-2026-E1", expiry=120, received=-10, unit="L", qty=25, par=10, price="2.000", notes="Proprietary blend. Refrigerate after opening.", storage="2–8°C after opening", secret=True, shelf=14, history=[("1.800", -90)]),
             dict(code="OL-001", name="Sunflower Oil", category="Oil", supplier="s6", batch="SWD-OIL-2026-E2", expiry=180, received=-20, unit="L", qty=60, par=20, price="1.200", notes="High smoke point, for searing patty.", storage="Room temp, away from light"),
             dict(code="VG-001", name="Roma Tomatoes", category="Vegetable", supplier="s5", batch="FFM-TOM-2026-F1", expiry=7, received=-3, unit="kg", qty=18, par=10, price="0.800", notes="Firm, consistent size. Slice before service.", storage="Room temp or 10–12°C"),
             dict(code="VG-002", name="Iceberg Lettuce", category="Vegetable", supplier="s5", batch="FFM-LET-2026-F2", expiry=5, received=-4, unit="kg", qty=10, par=5, price="0.500", notes="Crisp and fresh. Shred before service.", storage="2–4°C"),
@@ -180,7 +348,7 @@ class Command(BaseCommand):
             ("Smoked Paprika", "1", "g", "SP-001", "8.000"),
             ("Black Pepper (Ground)", "0.5", "g", "SP-002", "5.000"),
             ("Salt (Fine)", "2", "g", "SP-003", "0.300"),
-            ("Boom Special Sauce", "15", "ml", "SC-001", "2.000"),
+            ("House Special Sauce", "15", "ml", "SC-001", "2.000"),
             ("Sunflower Oil", "5", "ml", "OL-001", "1.200"),
             ("Roma Tomatoes", "30", "g", "VG-001", "0.800"),
             ("Iceberg Lettuce", "15", "g", "VG-002", "0.500"),
@@ -194,7 +362,7 @@ class Command(BaseCommand):
             ("Smoked Paprika", "1", "g", "SP-001", "8.000"),
             ("Black Pepper (Ground)", "0.5", "g", "SP-002", "5.000"),
             ("Salt (Fine)", "2", "g", "SP-003", "0.300"),
-            ("Boom Special Sauce", "18", "ml", "SC-001", "2.000"),
+            ("House Special Sauce", "18", "ml", "SC-001", "2.000"),
             ("Sunflower Oil", "5", "ml", "OL-001", "1.200"),
             ("Roma Tomatoes", "30", "g", "VG-001", "0.800"),
             ("Iceberg Lettuce", "15", "g", "VG-002", "0.500"),
@@ -205,7 +373,7 @@ class Command(BaseCommand):
             "Make the bun dough: flour + melted butter + yeast + warm water. Knead 8 minutes, rest 1 hour, add sesame seeds, bake at 190°C for 15 minutes.",
             "Heat the grill to high (230°C) and add a thin layer of sunflower oil.",
             "Grill the patty 3 minutes per side, add cheese, cover 30 seconds to melt.",
-            "Slice tomatoes and lettuce. Spread Boom sauce on the top bun.",
+            "Slice tomatoes and lettuce. Spread special sauce on the top bun.",
             "Assemble: bottom bun, lettuce, tomato, patty + cheese, sauce, top bun.",
         ]
         steps_v2 = [
@@ -213,14 +381,14 @@ class Command(BaseCommand):
             "Improved bun dough: 75g flour + 8g melted butter + yeast + warm water. Knead 8 minutes, rest 1 hour, add sesame, bake at 190°C for 15 minutes — lighter and softer than v1.",
             "Heat the grill to high (230°C) and add a thin layer of sunflower oil.",
             "Grill the patty 3 minutes per side, add cheese, cover 30 seconds to melt.",
-            "Slice tomatoes and lettuce. Spread 18ml of the balanced Boom sauce on the top bun.",
+            "Slice tomatoes and lettuce. Spread 18ml of the balanced special sauce on the top bun.",
             "Assemble: bottom bun, lettuce, tomato, patty + cheese, sauce, sesame top bun.",
         ]
 
         t1, _ = MealTrial.objects.update_or_create(
             code="BRG-001-V1",
             defaults={
-                "title": "Boom Burger Classic — Trial v1",
+                "title": "Beef burger — Trial v1",
                 "supplier": suppliers["s1"],
                 "trial_date": d(-4),
                 "conducted_by": "Chef Salim",
@@ -255,7 +423,7 @@ class Command(BaseCommand):
         t2, _ = MealTrial.objects.update_or_create(
             code="BRG-001-V2",
             defaults={
-                "title": "Boom Burger Classic — Final Version",
+                "title": "Beef burger",
                 "supplier": suppliers["s1"],
                 "trial_date": d(0),
                 "conducted_by": "Chef Salim",
@@ -268,7 +436,7 @@ class Command(BaseCommand):
                 "verdict": Verdict.SUITABLE,
                 "status": TrialStatus.COMPLETED,
                 "servings": 1,
-                "selling_price": Decimal("3.500"),
+                "selling_price": Decimal("1.300"),
                 "cooking_temperature": 230,
                 "cooking_duration": 12,
                 "repetition_number": 2,
@@ -289,19 +457,30 @@ class Command(BaseCommand):
         for i, text in enumerate(steps_v2):
             PrepStep.objects.create(trial=t2, text=text, sort_order=i)
 
+        ProductEvaluation.objects.filter(product_name="Boom Burger Classic").update(
+            product_name="Beef burger"
+        )
         eval_obj, _ = ProductEvaluation.objects.update_or_create(
-            product_name="Boom Burger Classic",
+            product_name="Beef burger",
             defaults={
                 "avg_success_rate": Decimal("89.00"),
                 "avg_rating": Decimal("4.50"),
                 "recommendation": Recommendation.APPROVED,
-                "notes": "Final version BRG-001-V2 fully approved for production. Version V1 serves as baseline only. Review beef supplier if price exceeds 5.00 OMR/kg.",
+                "notes": "Final beef burger trial fully approved for production. Earlier version serves as baseline only.",
             },
         )
         eval_obj.ingredients.set(list(ings.values())[:12])
         eval_obj.trials.set([t1, t2])
 
-        self.stdout.write(self.style.SUCCESS("Seeded ingredient lab demo data."))
+        extra = seed_chart_trials(suppliers, ings)
+        sync_all_approved_trials()
+        keep_names = {name for name, _ in SAMPLE_MEALS}
+        keep_names.update({"Beef burger", "Beef burger — Trial v1"})
+        ProductEvaluation.objects.exclude(product_name__in=keep_names).delete()
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Seeded ingredient lab demo data ({extra} sample chart trials)."
+        ))
         self.stdout.write("Admin:  admin@lab.test / admin123")
         self.stdout.write("Staff:  staff@lab.test / staff123")
         self.stdout.write("Viewer: viewer@lab.test / viewer123")

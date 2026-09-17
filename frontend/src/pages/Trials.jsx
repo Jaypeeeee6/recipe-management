@@ -10,7 +10,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import api from "../api/client";
+import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
+import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
@@ -38,10 +40,8 @@ function previewExpiry(date, amount, unit) {
   });
 }
 
-function isExpiringWithinOneDay(trial) {
-  if (!trial?.expires_at) return false;
-  const ms = new Date(trial.expires_at).getTime() - Date.now();
-  return ms > 0 && ms <= 24 * 60 * 60 * 1000;
+function isExpiringSoon(trial) {
+  return trial?.expiry_status === "expiring_soon";
 }
 
 function canApproveTrial(trial) {
@@ -129,8 +129,9 @@ export function TrialList() {
   const [notes, setNotes] = useState("");
   const [toast, setToast] = useState("");
   const [compareIds, setCompareIds] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get("/trials/?archived=false").then((r) => setItems(r.data));
+  const load = () => api.get("/trials/?archived=false").then((r) => setItems(r.data)).finally(() => setLoading(false));
   useEffect(() => {
     load();
     if (params.get("q")) setQ(params.get("q"));
@@ -140,8 +141,8 @@ export function TrialList() {
     `${t.title} ${t.code} ${t.conducted_by}`.toLowerCase().includes(q.toLowerCase())
   );
 
-  const expiringInOneDay = useMemo(
-    () => items.filter(isExpiringWithinOneDay),
+  const expiringSoon = useMemo(
+    () => items.filter(isExpiringSoon),
     [items]
   );
 
@@ -194,20 +195,26 @@ export function TrialList() {
             className="btn btn-gold"
             to={compareIds.length >= 2 ? `/trials/compare?ids=${compareIds.join(",")}` : "/trials/compare"}
           >
+            <Icon name="compare" />
             Compare Trials{compareIds.length ? ` (${compareIds.length})` : ""}
           </Link>
-          {canWrite(user) && <Link className="btn btn-primary" to="/trials/new">New Trial</Link>}
+          {canWrite(user) && (
+            <Link className="btn btn-add" to="/trials/new">
+              <Icon name="plus" />
+              New Trial
+            </Link>
+          )}
         </div>
       </div>
-      {expiringInOneDay.length > 0 && (
+      {expiringSoon.length > 0 && (
         <div className="alert alert-warn" role="alert">
           <strong>
-            {expiringInOneDay.length === 1
-              ? "1 trial expires within 1 day"
-              : `${expiringInOneDay.length} trials expire within 1 day`}
+            {expiringSoon.length === 1
+              ? "1 trial is expiring soon"
+              : `${expiringSoon.length} trials are expiring soon`}
           </strong>
           <ul className="alert-list">
-            {expiringInOneDay.map((t) => (
+            {expiringSoon.map((t) => (
               <li key={t.id}>
                 <Link to={`/trials/${t.id}`}>{t.code || t.title}</Link>
                 {t.title ? ` — ${t.title}` : ""}
@@ -224,9 +231,13 @@ export function TrialList() {
             <input placeholder="Search trials…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
         </div>
-        {filtered.length === 0 && <div className="empty">No trials found.</div>}
-        <div className="table-wrap">
-          <table className="data">
+        {loading ? (
+          <Skeleton count={6} />
+        ) : (
+          <>
+            {filtered.length === 0 && <div className="empty">No trials found.</div>}
+            <div className="table-wrap">
+              <table className="data">
             <thead>
               <tr>
                 <th style={{ width: 40 }}></th>
@@ -243,7 +254,7 @@ export function TrialList() {
             </thead>
             <tbody>
               {filtered.map((t) => (
-                <tr key={t.id} className={isExpiringWithinOneDay(t) ? "row-warn" : undefined}>
+                <tr key={t.id} className={isExpiringSoon(t) ? "row-warn" : undefined}>
                   <td>
                     <input
                       type="checkbox"
@@ -264,8 +275,8 @@ export function TrialList() {
                         <StatusBadge value={t.expiry_status} kind="expiry" />
                       </div>
                     )}
-                    {isExpiringWithinOneDay(t) && (
-                      <div className="hint hint-warn" style={{ marginTop: 4 }}>Expires within 1 day</div>
+                    {isExpiringSoon(t) && (
+                      <div className="hint hint-warn" style={{ marginTop: 4 }}>Expiring soon</div>
                     )}
                   </td>
                   <td>{formatDate(t.trial_date)}</td>
@@ -285,20 +296,21 @@ export function TrialList() {
                   <td><StatusBadge value={t.verdict} kind="verdict" /></td>
                   <td><StatusBadge value={t.status} /></td>
                   <td className="row-actions">
-                    <Link className="btn btn-ghost" to={`/trials/${t.id}`}>View</Link>
                     {canApproveTrial(t) && (
-                      <button className="btn btn-primary" onClick={() => approve(t)}>Approve</button>
+                      <IconAction name="check" title="Approve" tone="ok" onClick={() => approve(t)} />
                     )}
                     {canRejectTrial(t) && (
-                      <button className="btn btn-danger" onClick={() => setRejecting(t)}>Reject</button>
+                      <IconAction name="reject" title="Reject" tone="danger" onClick={() => setRejecting(t)} />
                     )}
-                    <button className="icon-btn" onClick={() => remove(t)} title="Delete">✕</button>
+                    <IconAction name="trash" title="Delete" tone="danger" onClick={() => remove(t)} />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+          </>
+        )}
       </div>
 
       {rejecting && (
@@ -308,7 +320,7 @@ export function TrialList() {
           actions={
             <>
               <button className="btn btn-back" onClick={() => setRejecting(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={reject}>Reject</button>
+              <button className="btn btn-danger" onClick={reject}><Icon name="reject" /> Reject</button>
             </>
           }
         >
@@ -368,6 +380,7 @@ export function TrialForm() {
   const [pendingPhoto, setPendingPhoto] = useState(null);
   const [dishPhoto, setDishPhoto] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [loading, setLoading] = useState(!isNew);
 
   useEffect(() => {
     api.get("/ingredients/?tab=approved").then((r) => setIngredients(r.data));
@@ -397,7 +410,7 @@ export function TrialForm() {
         const profit = profitFromSellingPrice(costPerServing, nextForm.selling_price);
         setProfitMargin(profit ? String(profit.margin) : "");
         setPricingSource("price");
-      });
+      }).finally(() => setLoading(false));
     }
   }, [id, isNew]);
 
@@ -552,6 +565,9 @@ export function TrialForm() {
         <h1>{isNew ? "New Trial" : "Edit Trial"}</h1>
         <Link className="btn btn-back" to={isNew ? "/trials" : `/trials/${id}`}>Back</Link>
       </div>
+      {loading ? (
+        <div className="card card-pad"><Skeleton count={8} height={36} /></div>
+      ) : (
       <form className="card card-pad" onSubmit={save}>
         {saveError && <div className="alert alert-warn" style={{ marginBottom: 16 }}>{saveError}</div>}
         <div className="form-grid">
@@ -791,7 +807,10 @@ export function TrialForm() {
             <button type="button" className="icon-btn" onClick={() => set("prep_steps", form.prep_steps.filter((_, idx) => idx !== i))}>✕</button>
           </div>
         ))}
-        <button type="button" className="btn btn-ghost" onClick={() => set("prep_steps", [...form.prep_steps, { text: "" }])}>Add Step</button>
+        <button type="button" className="btn btn-ghost" onClick={() => set("prep_steps", [...form.prep_steps, { text: "" }])}>
+          <Icon name="plus" />
+          Add Step
+        </button>
         {form.prep_steps.length === 0 && <div className="hint">No preparation steps added yet.</div>}
 
         <div className="field" style={{ marginTop: 16 }}>
@@ -802,6 +821,7 @@ export function TrialForm() {
           <button className="btn btn-primary">Save</button>
         </div>
       </form>
+      )}
     </div>
   );
 }
@@ -868,7 +888,19 @@ export function TrialDetail() {
     );
   }
 
-  if (!trial) return <div className="empty">Loading…</div>;
+  if (!trial) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <div className="hint"><Link to="/trials">Meal Trials</Link></div>
+            <h1>Meal Trial</h1>
+          </div>
+        </div>
+        <Skeleton count={6} height={56} />
+      </div>
+    );
+  }
 
   const scores = trial.committee_scores || {};
   const radar = [
@@ -928,13 +960,13 @@ export function TrialDetail() {
         </div>
         <div className="page-header-actions">
           {canApproveTrial(trial) && (
-            <button className="btn btn-primary" onClick={approve}>Approve</button>
+            <button className="btn btn-primary" onClick={approve}><Icon name="check" /> Approve</button>
           )}
           {canRejectTrial(trial) && (
-            <button className="btn btn-danger" onClick={() => setRejecting(true)}>Reject</button>
+            <button className="btn btn-danger" onClick={() => setRejecting(true)}><Icon name="reject" /> Reject</button>
           )}
-          <button className="btn btn-ghost" onClick={printRecipe}>Print Recipe</button>
-          <Link className="btn btn-gold" to={`/trials/${id}/edit`}>Edit Trial</Link>
+          <button className="btn btn-ghost" onClick={printRecipe}><Icon name="printer" /> Print Recipe</button>
+          <Link className="btn btn-gold" to={`/trials/${id}/edit`}><Icon name="edit" /> Edit Trial</Link>
         </div>
       </div>
 
@@ -1102,7 +1134,7 @@ export function TrialDetail() {
           actions={
             <>
               <button className="btn btn-back" onClick={() => setRejecting(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={reject}>Reject</button>
+              <button className="btn btn-danger" onClick={reject}><Icon name="reject" /> Reject</button>
             </>
           }
         >

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import api from "../api/client";
+import Icon from "./Icon";
 
 /**
  * Photo picker + preview. For existing records, uploads immediately.
@@ -83,7 +84,7 @@ export default function PhotoUpload({
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
           >
-            {uploading ? "Uploading…" : preview ? "Change Photo" : "Add Photo"}
+            {uploading ? "Uploading…" : preview ? "Change Photo" : <><Icon name="plus" /> Add Photo</>}
           </button>
           {pendingFile && !uploadUrl && (
             <div className="hint">Photo will upload after you save.</div>

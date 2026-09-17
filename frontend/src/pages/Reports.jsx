@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
+import Icon from "../components/Icon";
 import StatusBadge from "../components/StatusBadge";
 import { verdictLabel } from "../utils/format";
 
@@ -30,15 +31,15 @@ export default function Reports() {
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "lab-report.csv";
+    a.download = "recipe-report.csv";
     a.click();
   };
 
   const exportPDF = () => {
     if (!report) return;
-    const html = `<html><head><title>Lab Report</title>
+    const html = `<html><head><title>Recipe Management System Report</title>
       <style>body{font-family:Segoe UI,sans-serif;padding:24px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ccc;padding:6px;text-align:left}h1{margin:0 0 12px}</style></head>
-      <body><h1>Ingredient Lab Report</h1>
+      <body><h1>Recipe Management System Report</h1>
       <p>Total trials: ${report.summary.total_trials} · Avg success: ${report.summary.avg_success_rate}% · Approved: ${report.summary.suitable}</p>
       <table><tr><th>Trial</th><th>Date</th><th>By</th><th>Success</th><th>Decision</th><th>Rating</th></tr>
       ${report.rows.map((r) => `<tr><td>${r.title}</td><td>${r.date || ""}</td><td>${r.conducted_by}</td><td>${r.success_rate}%</td><td>${verdictLabel(r.verdict)}</td><td>${r.rating}</td></tr>`).join("")}
@@ -87,9 +88,9 @@ export default function Reports() {
           </div>
         </div>
         <div className="page-header-actions" style={{ marginTop: 16 }}>
-          <button className="btn btn-primary" onClick={generate}>Generate Report</button>
-          <button className="btn btn-gold" disabled={!report} onClick={exportPDF}>Export PDF</button>
-          <button className="btn btn-ghost" disabled={!report} onClick={exportCSV}>Export CSV</button>
+          <button className="btn btn-primary" onClick={generate}><Icon name="chart" /> Generate Report</button>
+          <button className="btn btn-gold" disabled={!report} onClick={exportPDF}><Icon name="download" /> Export PDF</button>
+          <button className="btn btn-ghost" disabled={!report} onClick={exportCSV}><Icon name="file" /> Export CSV</button>
         </div>
       </div>
 

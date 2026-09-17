@@ -2,6 +2,10 @@ from django.contrib import admin
 
 from . import models as m
 
+admin.site.site_header = "Recipe Management System"
+admin.site.site_title = "Recipe Management System"
+admin.site.index_title = "Administration"
+
 
 @admin.register(m.UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):

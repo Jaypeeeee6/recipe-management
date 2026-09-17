@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useNavigate, useParams } from "react-router-dom";
 import api from "../api/client";
+import Icon, { IconAction } from "../components/Icon";
+import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
 import { formatDate, formatDateTime, formatExpiryUnit, formatMoney } from "../utils/format";
@@ -28,8 +30,9 @@ function ProductTabs() {
 
 export function ProductList() {
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get("/evaluations/").then((r) => setItems(r.data));
+  const load = () => api.get("/evaluations/").then((r) => setItems(r.data)).finally(() => setLoading(false));
   useEffect(() => {
     load();
   }, []);
@@ -55,11 +58,14 @@ export function ProductList() {
           <h1>Products</h1>
           <p>Approved meal trials sync here automatically, or add products manually</p>
         </div>
-        <Link className="btn btn-primary" to="/products/new">Add Product</Link>
+        <Link className="btn btn-add" to="/products/new"><Icon name="plus" /> Add Product</Link>
       </div>
 
       <div className="card">
         <ProductTabs />
+        {loading ? (
+          <div className="card-pad"><Skeleton count={6} /></div>
+        ) : (
         <div className="table-wrap">
           <table className="data">
             <thead>
@@ -107,15 +113,18 @@ export function ProductList() {
                   <td>{Number(p.avg_success_rate || 0).toFixed(1)}%</td>
                   <td><Stars value={p.avg_rating} /></td>
                   <td className="hint">{p.notes || "—"}</td>
-                  <td className="row-actions">
-                    <button type="button" className="btn btn-ghost" onClick={() => exportPdf(p)}>Export PDF</button>
-                    <button type="button" className="icon-btn" onClick={() => remove(p)}>✕</button>
+                  <td>
+                    <div className="row-actions">
+                      <IconAction name="download" title="Export PDF" onClick={() => exportPdf(p)} />
+                      <IconAction name="trash" title="Delete" tone="danger" onClick={() => remove(p)} />
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );
@@ -125,8 +134,9 @@ export function ProductArchives() {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const load = () => api.get("/trials/?archived=true").then((r) => setItems(r.data));
+  const load = () => api.get("/trials/?archived=true").then((r) => setItems(r.data)).finally(() => setLoading(false));
   useEffect(() => {
     load();
   }, []);
@@ -170,12 +180,15 @@ export function ProductArchives() {
           </select>
         </div>
 
-        {filtered.length === 0 && (
-          <div className="empty">No archived meal trials yet.</div>
-        )}
-
-        <div className="table-wrap">
-          <table className="data">
+        {loading ? (
+          <Skeleton count={6} />
+        ) : (
+          <>
+            {filtered.length === 0 && (
+              <div className="empty">No archived meal trials yet.</div>
+            )}
+            <div className="table-wrap">
+              <table className="data">
             <thead>
               <tr>
                 <th>Code</th>
@@ -185,7 +198,6 @@ export function ProductArchives() {
                 <th>Decision</th>
                 <th>Expiry</th>
                 <th>Rejection Notes</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -229,14 +241,13 @@ export function ProductArchives() {
                       </>
                     ) : "—"}
                   </td>
-                  <td>
-                    <Link className="btn btn-ghost" to={`/trials/${t.id}`}>View</Link>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -257,6 +268,7 @@ export function ProductForm() {
   const [trialTitles, setTrialTitles] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [ingSearch, setIngSearch] = useState("");
+  const [loading, setLoading] = useState(!isNew);
 
   useEffect(() => {
     api.get("/ingredients/?tab=approved").then((r) => setIngredients(r.data));
@@ -271,7 +283,7 @@ export function ProductForm() {
           selling_price: r.data.selling_price ?? null,
         });
         setTrialTitles(r.data.trial_titles || []);
-      });
+      }).finally(() => setLoading(false));
     }
   }, [id, isNew]);
 
@@ -332,12 +344,15 @@ export function ProductForm() {
                   .map((i) => ({ id: i.id, name: i.name })),
               })}
             >
-              Export PDF
+              <Icon name="download" /> Export PDF
             </button>
           )}
           <Link className="btn btn-back" to="/products">Back</Link>
         </div>
       </div>
+      {loading ? (
+        <div className="card card-pad"><Skeleton count={6} height={36} /></div>
+      ) : (
       <form className="card card-pad" onSubmit={save}>
         <div className="field">
           <label>Product Name</label>
@@ -366,7 +381,9 @@ export function ProductForm() {
             onChange={(e) => setIngSearch(e.target.value)}
             style={{ maxWidth: 360, marginBottom: 12 }}
           />
-          {groupedIngredients.length === 0 && (
+          {loading ? (
+            <Skeleton count={4} />
+          ) : groupedIngredients.length === 0 && (
             <div className="empty">No approved ingredients found.</div>
           )}
           {groupedIngredients.map((section) => (
@@ -417,6 +434,7 @@ export function ProductForm() {
           <button className="btn btn-primary">Save</button>
         </div>
       </form>
+      )}
     </div>
   );
 }

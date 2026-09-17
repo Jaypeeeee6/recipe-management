@@ -16,7 +16,7 @@ import Committee from "./pages/Committee";
 
 function Protected({ children }) {
   const { user, ready } = useAuth();
-  if (!ready) return <div className="empty">Loading…</div>;
+  if (!ready) return null;
   if (!user) return <Navigate to="/login" replace />;
   return <AppLayout>{children}</AppLayout>;
 }
@@ -29,7 +29,7 @@ export default function App() {
       <Route path="/evaluate/:trialId" element={<Committee />} />
       <Route
         path="/login"
-        element={ready && user ? <Navigate to="/" replace /> : <Login />}
+        element={!ready ? null : user ? <Navigate to="/" replace /> : <Login />}
       />
       <Route path="/" element={<Protected><Dashboard /></Protected>} />
       <Route path="/ingredients" element={<Protected><Ingredients /></Protected>} />
