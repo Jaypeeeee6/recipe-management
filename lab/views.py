@@ -25,7 +25,6 @@ from .models import (
     Role,
     Supplier,
     TrialProductStatus,
-    TrialStatus,
     UserProfile,
     Verdict,
 )
@@ -390,7 +389,6 @@ class MealTrialViewSet(viewsets.ModelViewSet):
                 status=400,
             )
         trial.verdict = Verdict.SUITABLE
-        trial.status = TrialStatus.COMPLETED
         trial.rejection_reason = ""
         trial.rejection_notes = ""
         trial.save()
@@ -415,7 +413,6 @@ class MealTrialViewSet(viewsets.ModelViewSet):
                 status=400,
             )
         trial.verdict = Verdict.NOT_SUITABLE
-        trial.status = TrialStatus.COMPLETED
         trial.rejection_reason = request.data.get("rejection_reason", "other")
         trial.rejection_notes = request.data.get("rejection_notes", "")
         trial.save()
@@ -608,8 +605,9 @@ def dashboard_view(request):
     if visibility:
         ingredients = ingredients.filter(visibility).distinct()
     trials = MealTrial.objects.all()
-    completed = trials.filter(status="completed")
-    success_avg = completed.aggregate(avg=Avg("success_rate"))["avg"] or 0
+    success_avg = (
+        trials.exclude(verdict=Verdict.PENDING).aggregate(avg=Avg("success_rate"))["avg"] or 0
+    )
 
     low_stock = [
         IngredientListSerializer(i, context={"request": request}).data

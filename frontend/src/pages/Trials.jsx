@@ -248,7 +248,6 @@ export function TrialList() {
                 <th>By</th>
                 <th>Success</th>
                 <th>Decision</th>
-                <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -275,9 +274,6 @@ export function TrialList() {
                         <StatusBadge value={t.expiry_status} kind="expiry" />
                       </div>
                     )}
-                    {isExpiringSoon(t) && (
-                      <div className="hint hint-warn" style={{ marginTop: 4 }}>Expiring soon</div>
-                    )}
                   </td>
                   <td>{formatDate(t.trial_date)}</td>
                   <td>
@@ -294,7 +290,6 @@ export function TrialList() {
                   <td>{t.conducted_by}</td>
                   <td>{t.success_rate}%</td>
                   <td><StatusBadge value={t.verdict} kind="verdict" /></td>
-                  <td><StatusBadge value={t.status} /></td>
                   <td className="row-actions">
                     {canApproveTrial(t) && (
                       <IconAction name="check" title="Approve" tone="ok" onClick={() => approve(t)} />

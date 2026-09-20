@@ -299,7 +299,6 @@ class MealTrialListSerializer(serializers.ModelSerializer):
             "consistency",
             "overall",
             "verdict",
-            "status",
             "rejection_reason",
             "rejection_notes",
             "servings",

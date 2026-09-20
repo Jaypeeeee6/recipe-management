@@ -18,7 +18,6 @@ from lab.models import (
     Role,
     Supplier,
     SupplierType,
-    TrialStatus,
     UserProfile,
     Verdict,
 )
@@ -143,22 +142,18 @@ def seed_chart_trials(suppliers, ings):
                 chef = SAMPLE_CHEFS[(seq + day.weekday()) % len(SAMPLE_CHEFS)]
                 verdict = _slot_verdict(kind, slot, seq)
                 if verdict == Verdict.SUITABLE:
-                    status = TrialStatus.COMPLETED
                     success = 78 + ((seq * 3) % 21)
                     reason = ""
                     notes = "Committee approved. Ready to move toward production."
                 elif verdict == Verdict.NOT_SUITABLE:
-                    status = TrialStatus.COMPLETED
                     success = 38 + ((seq * 5) % 28)
                     reason = (RejectionReason.TASTE, RejectionReason.PRICE, RejectionReason.OTHER)[slot % 3]
                     notes = "Did not meet the standard. Archived after committee review."
                 elif verdict == Verdict.EMERGENCY:
-                    status = TrialStatus.COMPLETED
                     success = 70 + (seq % 12)
                     reason = ""
                     notes = "Approved as an emergency substitute only."
                 else:
-                    status = TrialStatus.DRAFT
                     success = 0
                     reason = ""
                     notes = "Awaiting committee tasting."
@@ -176,7 +171,6 @@ def seed_chart_trials(suppliers, ings):
                         "consistency": 2 + ((seq + 3) % 4),
                         "overall": 2 + ((seq + day.weekday()) % 4),
                         "verdict": verdict,
-                        "status": status,
                         "rejection_reason": reason,
                         "rejection_notes": notes if verdict == Verdict.NOT_SUITABLE else "",
                         "servings": 1,
@@ -399,7 +393,6 @@ class Command(BaseCommand):
                 "consistency": 3,
                 "overall": 4,
                 "verdict": Verdict.EMERGENCY,
-                "status": TrialStatus.COMPLETED,
                 "servings": 1,
                 "cooking_temperature": 230,
                 "cooking_duration": 12,
@@ -434,7 +427,6 @@ class Command(BaseCommand):
                 "consistency": 5,
                 "overall": 5,
                 "verdict": Verdict.SUITABLE,
-                "status": TrialStatus.COMPLETED,
                 "servings": 1,
                 "selling_price": Decimal("1.300"),
                 "cooking_temperature": 230,

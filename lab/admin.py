@@ -31,7 +31,7 @@ class IngredientAdmin(admin.ModelAdmin):
 
 @admin.register(m.MealTrial)
 class MealTrialAdmin(admin.ModelAdmin):
-    list_display = ("code", "title", "trial_date", "expires_at", "verdict", "status", "success_rate")
+    list_display = ("code", "title", "trial_date", "expires_at", "verdict", "success_rate")
 
 
 @admin.register(m.ProductEvaluation)

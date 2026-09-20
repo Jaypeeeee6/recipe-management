@@ -1,4 +1,4 @@
-import { statusBadgeClass, expiryLabel, verdictLabel } from "../utils/format";
+import { statusBadgeClass, expiryLabel, statusLabel, verdictLabel } from "../utils/format";
 
 export default function StatusBadge({ value, kind = "status" }) {
   const label =
@@ -6,6 +6,6 @@ export default function StatusBadge({ value, kind = "status" }) {
       ? expiryLabel(value)
       : kind === "verdict"
         ? verdictLabel(value)
-        : String(value || "").replaceAll("_", " ");
+        : statusLabel(value);
   return <span className={statusBadgeClass(value)}>{label}</span>;
 }

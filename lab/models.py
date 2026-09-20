@@ -32,11 +32,6 @@ class RejectionReason(models.TextChoices):
     OTHER = "other", "Other"
 
 
-class TrialStatus(models.TextChoices):
-    DRAFT = "draft", "Draft"
-    COMPLETED = "completed", "Completed"
-
-
 class ExpiryUnit(models.TextChoices):
     HOURS = "hours", "Hours"
     DAYS = "days", "Days"
@@ -241,9 +236,6 @@ class MealTrial(models.Model):
         max_length=20, choices=RejectionReason.choices, blank=True
     )
     rejection_notes = models.TextField(blank=True)
-    status = models.CharField(
-        max_length=20, choices=TrialStatus.choices, default=TrialStatus.DRAFT
-    )
     servings = models.PositiveIntegerField(default=1)
     selling_price = models.DecimalField(
         max_digits=12, decimal_places=3, null=True, blank=True
@@ -281,17 +273,13 @@ class MealTrial(models.Model):
         super().save(*args, **kwargs)
 
     def apply_expiry_rejection(self):
-        """Expired trials are automatically marked not suitable / completed."""
+        """Expired trials are automatically marked not suitable."""
         if not self.expires_at or timezone.now() < self.expires_at:
             return False
-        changed = False
-        if self.verdict != Verdict.NOT_SUITABLE:
-            self.verdict = Verdict.NOT_SUITABLE
-            changed = True
-        if self.status != TrialStatus.COMPLETED:
-            self.status = TrialStatus.COMPLETED
-            changed = True
-        return changed
+        if self.verdict == Verdict.NOT_SUITABLE:
+            return False
+        self.verdict = Verdict.NOT_SUITABLE
+        return True
 
     def compute_expires_at(self):
         if not self.expiry_amount:

@@ -78,19 +78,26 @@ export function statusBadgeClass(status) {
     not_suitable: "badge-rejected",
     pending: "badge-draft",
     emergency_substitute: "badge-emergency",
-    draft: "badge-draft",
-    completed: "badge-completed",
     testing: "badge-testing",
     approved: "badge-approved",
     rejected: "badge-rejected",
     backup_only: "badge-emergency",
-    pending: "badge-draft",
   };
   return `badge ${map[status] || "badge-draft"}`;
 }
 
 export function expiryLabel(status) {
   return { valid: "Valid", expiring_soon: "Expiring Soon", expired: "Expired" }[status] || status;
+}
+
+export function statusLabel(status) {
+  return {
+    testing: "Under Testing",
+    approved: "Approved",
+    rejected: "Rejected",
+    backup_only: "Backup Only",
+    pending: "Pending",
+  }[status] || String(status || "").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function foodCostTone(pct) {

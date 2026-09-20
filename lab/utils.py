@@ -161,17 +161,15 @@ def expire_overdue_trials():
     """Persist auto-rejection for trials past their expiry time."""
     from django.utils import timezone
 
-    from .models import MealTrial, TrialStatus, Verdict
+    from .models import MealTrial, Verdict
 
     updated = MealTrial.objects.filter(
         expires_at__isnull=False,
         expires_at__lte=timezone.now(),
     ).exclude(
         verdict=Verdict.NOT_SUITABLE,
-        status=TrialStatus.COMPLETED,
     ).update(
         verdict=Verdict.NOT_SUITABLE,
-        status=TrialStatus.COMPLETED,
     )
     if updated:
         sync_all_approved_trials()
