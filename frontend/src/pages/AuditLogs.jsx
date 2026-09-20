@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import api from "../api/client";
 import Icon from "../components/Icon";
+import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import { useAuth } from "../auth/AuthContext";
 import { canViewAudit } from "../utils/roles";
@@ -32,6 +33,10 @@ export default function AuditLogs() {
   useEffect(() => {
     if (canViewAudit(user)) load();
   }, [user]);
+
+  const {
+    page, setPage, pageItems, total, totalPages, from, to,
+  } = usePagination(items, 15, `${q}|${action}|${items.length}`);
 
   if (!canViewAudit(user)) {
     return <Navigate to="/" replace />;
@@ -76,6 +81,7 @@ export default function AuditLogs() {
         {!loading && !error && items.length === 0 && <div className="empty">No audit events yet.</div>}
 
         {items.length > 0 && (
+          <>
           <div className="table-wrap">
             <table className="data">
               <thead>
@@ -89,7 +95,7 @@ export default function AuditLogs() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((row) => (
+                {pageItems.map((row) => (
                   <tr key={row.id}>
                     <td>{formatDateTime(row.created_at)}</td>
                     <td>
@@ -108,6 +114,8 @@ export default function AuditLogs() {
               </tbody>
             </table>
           </div>
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+          </>
         )}
       </div>
     </div>

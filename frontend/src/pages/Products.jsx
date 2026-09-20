@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useNavigate, useParams } from "react-router-dom";
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
+import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
@@ -24,6 +25,30 @@ function ProductTabs() {
       >
         Archives
       </NavLink>
+    </div>
+  );
+}
+
+const LIST_PREVIEW = 2;
+
+function ExpandableList({ items, renderItem, empty = "—" }) {
+  const [open, setOpen] = useState(false);
+  const list = items || [];
+  if (list.length === 0) return empty;
+  const shown = open ? list : list.slice(0, LIST_PREVIEW);
+  const hidden = list.length - LIST_PREVIEW;
+  return (
+    <div className="expandable-list">
+      {shown.map(renderItem)}
+      {list.length > LIST_PREVIEW && (
+        <button
+          type="button"
+          className="btn-show-more"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? "Show less" : `Show more (${hidden})`}
+        </button>
+      )}
     </div>
   );
 }
@@ -51,6 +76,10 @@ export function ProductList() {
     }
   };
 
+  const {
+    page, setPage, pageItems, total, totalPages, from, to,
+  } = usePagination(items, 10);
+
   return (
     <div>
       <div className="page-header">
@@ -66,17 +95,18 @@ export function ProductList() {
         {loading ? (
           <div className="card-pad"><Skeleton count={6} /></div>
         ) : (
+        <>
         <div className="table-wrap">
-          <table className="data">
+          <table className="data products-table">
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Selling Price</th>
+                <th className="col-product">Product</th>
+                <th className="col-price">Selling Price</th>
                 <th>Approved Trials</th>
                 <th>Ingredients</th>
                 <th>Avg Success</th>
                 <th>Avg Rating</th>
-                <th>Notes</th>
+                <th className="col-notes">Notes</th>
                 <th></th>
               </tr>
             </thead>
@@ -90,29 +120,33 @@ export function ProductList() {
                   </td>
                 </tr>
               )}
-              {items.map((p) => (
+              {pageItems.map((p) => (
                 <tr key={p.id}>
-                  <td><Link to={`/products/${p.id}`}>{p.product_name}</Link></td>
-                  <td>{p.selling_price != null ? formatMoney(p.selling_price) : "—"}</td>
+                  <td className="col-product"><Link to={`/products/${p.id}`}>{p.product_name}</Link></td>
+                  <td className="col-price">{p.selling_price != null ? formatMoney(p.selling_price) : "—"}</td>
                   <td>
-                    {(p.trial_titles || []).length === 0 && "—"}
-                    {(p.trial_titles || []).map((t) => (
-                      <div key={t.id} className="hint">
-                        <Link to={`/trials/${t.id}`}>{t.code}</Link> — {t.title}
-                      </div>
-                    ))}
+                    <ExpandableList
+                      items={p.trial_titles}
+                      renderItem={(t) => (
+                        <div key={t.id} className="expandable-list-item">
+                          <Link to={`/trials/${t.id}`}>{t.code}</Link> — {t.title}
+                        </div>
+                      )}
+                    />
                   </td>
                   <td>
-                    {(p.ingredient_titles || []).length === 0 && "—"}
-                    {(p.ingredient_titles || []).map((i) => (
-                      <div key={i.id} className="hint">
-                        <Link to={`/ingredients/${i.id}`}>{i.code}</Link> — {i.name}
-                      </div>
-                    ))}
+                    <ExpandableList
+                      items={p.ingredient_titles}
+                      renderItem={(i) => (
+                        <div key={i.id} className="expandable-list-item">
+                          <Link to={`/ingredients/${i.id}`}>{i.code}</Link> — {i.name}
+                        </div>
+                      )}
+                    />
                   </td>
                   <td>{Number(p.avg_success_rate || 0).toFixed(1)}%</td>
                   <td><Stars value={p.avg_rating} /></td>
-                  <td className="hint">{p.notes || "—"}</td>
+                  <td className="col-notes">{p.notes || "—"}</td>
                   <td>
                     <div className="row-actions">
                       <IconAction name="download" title="Export PDF" onClick={() => exportPdf(p)} />
@@ -124,6 +158,8 @@ export function ProductList() {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+        </>
         )}
       </div>
     </div>
@@ -151,6 +187,10 @@ export function ProductArchives() {
       return (t.archive_reasons || []).includes(filter);
     });
   }, [items, q, filter]);
+
+  const {
+    page, setPage, pageItems, total, totalPages, from, to,
+  } = usePagination(filtered, 10, `${q}|${filter}`);
 
   return (
     <div>
@@ -201,7 +241,7 @@ export function ProductArchives() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => (
+              {pageItems.map((t) => (
                 <tr key={t.id}>
                   <td>{t.code}</td>
                   <td>
@@ -246,6 +286,7 @@ export function ProductArchives() {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
           </>
         )}
       </div>

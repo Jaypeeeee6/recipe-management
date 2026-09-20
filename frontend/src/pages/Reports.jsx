@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import Icon from "../components/Icon";
+import Pagination, { usePagination } from "../components/Pagination";
 import StatusBadge from "../components/StatusBadge";
 import { verdictLabel } from "../utils/format";
 
@@ -9,6 +10,7 @@ export default function Reports() {
   const [suppliers, setSuppliers] = useState([]);
   const [filters, setFilters] = useState({ from: "", to: "", category: "", supplier: "", verdict: "" });
   const [report, setReport] = useState(null);
+  const [reportKey, setReportKey] = useState(0);
 
   useEffect(() => {
     api.get("/categories/").then((r) => setCategories(r.data));
@@ -18,16 +20,24 @@ export default function Reports() {
   const generate = () => {
     const q = new URLSearchParams();
     Object.entries(filters).forEach(([k, v]) => v && q.set(k, v));
-    api.get(`/reports/?${q}`).then((r) => setReport(r.data));
+    api.get(`/reports/?${q}`).then((r) => {
+      setReport(r.data);
+      setReportKey((k) => k + 1);
+    });
   };
+
+  const rows = report?.rows || [];
+  const {
+    page, setPage, pageItems, total, totalPages, from, to,
+  } = usePagination(rows, 10, String(reportKey));
 
   const exportCSV = () => {
     if (!report) return;
-      const header = ["Trial", "Date", "Conducted By", "Ingredients", "Success", "Verdict", "Expiry", "Rating", "Notes"];
-      const rows = report.rows.map((r) => [
-        r.title, r.date, r.conducted_by, (r.ingredients || []).join("; "), r.success_rate, verdictLabel(r.verdict), r.expiry_remaining_label || "", r.rating, (r.notes || "").replaceAll("\n", " "),
-      ]);
-    const csv = [header, ...rows].map((row) => row.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const header = ["Trial", "Date", "Conducted By", "Ingredients", "Success", "Verdict", "Expiry", "Rating", "Notes"];
+    const csvRows = report.rows.map((r) => [
+      r.title, r.date, r.conducted_by, (r.ingredients || []).join("; "), r.success_rate, verdictLabel(r.verdict), r.expiry_remaining_label || "", r.rating, (r.notes || "").replaceAll("\n", " "),
+    ]);
+    const csv = [header, ...csvRows].map((row) => row.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -103,28 +113,35 @@ export default function Reports() {
           </div>
           <div className="card">
             {report.rows.length === 0 && <div className="empty">No data matches the selected filters.</div>}
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Trial</th><th>Date</th><th>Conducted By</th><th>Ingredients</th><th>Success</th><th>Decision</th><th>Expiry</th><th>Rating</th><th>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.rows.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.title}</td>
-                    <td>{r.date}</td>
-                    <td>{r.conducted_by}</td>
-                    <td>{(r.ingredients || []).join(", ")}</td>
-                    <td>{r.success_rate}%</td>
-                    <td><StatusBadge value={r.verdict} kind="verdict" /></td>
-                    <td>{r.expiry_remaining_label || "—"}</td>
-                    <td>{r.rating}</td>
-                    <td>{r.notes}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {report.rows.length > 0 && (
+              <>
+                <div className="table-wrap">
+                  <table className="data">
+                    <thead>
+                      <tr>
+                        <th>Trial</th><th>Date</th><th>Conducted By</th><th>Ingredients</th><th>Success</th><th>Decision</th><th>Expiry</th><th>Rating</th><th>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageItems.map((r) => (
+                        <tr key={r.id}>
+                          <td>{r.title}</td>
+                          <td>{r.date}</td>
+                          <td>{r.conducted_by}</td>
+                          <td>{(r.ingredients || []).join(", ")}</td>
+                          <td>{r.success_rate}%</td>
+                          <td><StatusBadge value={r.verdict} kind="verdict" /></td>
+                          <td>{r.expiry_remaining_label || "—"}</td>
+                          <td>{r.rating}</td>
+                          <td>{r.notes}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+              </>
+            )}
           </div>
         </>
       )}

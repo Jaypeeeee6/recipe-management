@@ -14,6 +14,7 @@ import api from "../api/client";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
 import Modal from "../components/Modal";
+import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import { formatDate, formatDateTime } from "../utils/format";
 
@@ -242,11 +243,22 @@ export default function Dashboard() {
     setTrialsPeriod(defaultPeriod(grain));
   };
 
+  const expiringTrialsForPage = data?.expiring_trials || [];
+  const {
+    page: expiringPage,
+    setPage: setExpiringPage,
+    pageItems: expiringPageItems,
+    total: expiringTotal,
+    totalPages: expiringTotalPages,
+    from: expiringFrom,
+    to: expiringTo,
+  } = usePagination(expiringTrialsForPage, 10, String(expiringTrialsForPage.length));
+
   if (error) return <div className="empty">{error}</div>;
 
   const totals = data?.totals || {};
   const lowStock = data?.low_stock || [];
-  const expiringTrials = data?.expiring_trials || [];
+  const expiringTrials = expiringTrialsForPage;
   const recentTrials = data?.recent_trials || [];
   const recentProducts = data?.recent_products || [];
   const verdictsChart = (data?.verdicts_over_time || []).map((row) => ({
@@ -529,7 +541,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {expiringTrials.map((t) => (
+                  {expiringPageItems.map((t) => (
                     <tr key={t.id} className="row-warn">
                       <td>{t.code}</td>
                       <td>
@@ -547,6 +559,16 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+          )}
+          {expiringTrials.length > 0 && (
+            <Pagination
+              page={expiringPage}
+              totalPages={expiringTotalPages}
+              onChange={setExpiringPage}
+              total={expiringTotal}
+              from={expiringFrom}
+              to={expiringTo}
+            />
           )}
         </Modal>
       )}

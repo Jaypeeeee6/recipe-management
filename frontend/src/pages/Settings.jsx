@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
+import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import { canClearData, canManageUsers, canViewAudit, canWrite, roleLabel } from "../utils/roles";
 
@@ -71,6 +72,10 @@ export default function Settings() {
     setToast("Operational data cleared. Re-run seed_lab to restore demo data.");
   };
 
+  const {
+    page, setPage, pageItems, total, totalPages, from, to,
+  } = usePagination(users, 10, String(users.length));
+
   return (
     <div>
       {toast && <div className="toast">{toast}</div>}
@@ -104,7 +109,7 @@ export default function Settings() {
               {loading ? (
                 <tr><td colSpan="4"><Skeleton count={4} /></td></tr>
               ) : (
-                users.map((u) => (
+                pageItems.map((u) => (
                 <tr key={u.id}>
                   <td>{u.display_name}</td>
                   <td>{u.email}</td>
@@ -118,6 +123,9 @@ export default function Settings() {
               )}
             </tbody>
           </table>
+          {!loading && (
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+          )}
         </div>
       )}
 

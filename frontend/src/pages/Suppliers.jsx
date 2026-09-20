@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
+import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import Stars from "../components/Stars";
 
@@ -28,6 +29,9 @@ export function SupplierList() {
   const filtered = items.filter((s) =>
     `${s.company_name} ${s.contact_person} ${s.city}`.toLowerCase().includes(q.toLowerCase())
   );
+  const {
+    page, setPage, pageItems, total, totalPages, from, to,
+  } = usePagination(filtered, 10, q);
 
   const remove = async (s) => {
     if (!confirm("Are you sure you want to delete this supplier?")) return;
@@ -70,7 +74,7 @@ export function SupplierList() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s) => (
+              {pageItems.map((s) => (
                 <tr key={s.id}>
                   <td><Link to={`/suppliers/${s.id}`}>{s.company_name}</Link></td>
                   <td>{s.contact_person}<div className="hint">{s.phone}</div></td>
@@ -86,6 +90,7 @@ export function SupplierList() {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
           </>
         )}
       </div>

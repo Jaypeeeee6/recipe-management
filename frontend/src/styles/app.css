@@ -733,6 +733,100 @@ table.data td {
 table.data tr:hover td { background: #faf8f3; }
 .table-wrap { overflow-x: auto; overflow-y: visible; }
 
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.pagination-meta {
+  font-size: 13px;
+  color: var(--muted, #6b7280);
+}
+.pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.pagination-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pagination-btn:hover:not(:disabled):not(.active) {
+  background: #faf8f3;
+}
+.pagination-btn.active {
+  background: var(--gold, #c4a35a);
+  border-color: var(--gold, #c4a35a);
+  color: #fff;
+}
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pagination-ellipsis {
+  padding: 0 4px;
+  color: var(--muted, #6b7280);
+}
+
+.products-table .col-product {
+  width: 18%;
+  min-width: 150px;
+}
+.products-table .col-price {
+  width: 150px;
+  white-space: nowrap;
+}
+.products-table .col-notes {
+  width: 120px;
+  max-width: 140px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: middle;
+  line-height: 1.35;
+  color: var(--text);
+}
+.expandable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.expandable-list-item {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.btn-show-more {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--sage);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.btn-show-more:hover {
+  color: var(--sage-dark);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

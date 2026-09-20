@@ -12,6 +12,7 @@ import {
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
+import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
@@ -142,6 +143,9 @@ export function TrialList() {
   const filtered = items.filter((t) =>
     `${t.title} ${t.code} ${t.conducted_by}`.toLowerCase().includes(q.toLowerCase())
   );
+  const {
+    page, setPage, pageItems, total, totalPages, from, to,
+  } = usePagination(filtered, 10, q);
 
   const expiringSoon = useMemo(
     () => items.filter(isExpiringSoon),
@@ -254,7 +258,7 @@ export function TrialList() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => (
+              {pageItems.map((t) => (
                 <tr key={t.id} className={isExpiringSoon(t) ? "row-warn" : undefined}>
                   <td>
                     <input
@@ -306,6 +310,7 @@ export function TrialList() {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
           </>
         )}
       </div>

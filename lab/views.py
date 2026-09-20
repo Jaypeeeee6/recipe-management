@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Prefetch, Q
 from django.db.models.functions import TruncMonth, TruncWeek
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -57,7 +57,6 @@ from .utils import (
     expire_overdue_trials,
     next_ingredient_code,
     next_trial_code,
-    sync_all_approved_trials,
     sync_approved_trial_to_product,
     sync_trial_ratings_from_committee,
     trial_archive_q,
@@ -443,13 +442,25 @@ class MealTrialViewSet(viewsets.ModelViewSet):
 
 
 class ProductEvaluationViewSet(viewsets.ModelViewSet):
-    queryset = ProductEvaluation.objects.prefetch_related("ingredients", "trials")
     serializer_class = ProductEvaluationSerializer
     permission_classes = [IsAuthenticatedReadOrWriteRole]
 
     def get_queryset(self):
-        sync_all_approved_trials()
-        return super().get_queryset()
+        return (
+            ProductEvaluation.objects.prefetch_related(
+                Prefetch(
+                    "ingredients",
+                    queryset=Ingredient.objects.select_related("category").only(
+                        "id", "code", "name", "category_id"
+                    ),
+                ),
+                Prefetch(
+                    "trials",
+                    queryset=MealTrial.objects.only("id", "code", "title", "selling_price"),
+                ),
+            )
+            .order_by("-updated_at", "-id")
+        )
 
     def perform_create(self, serializer):
         obj = serializer.save()

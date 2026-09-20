@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Modal from "../components/Modal";
 import Icon, { IconAction } from "../components/Icon";
+import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import { formatDate, formatMoney } from "../utils/format";
@@ -105,9 +106,17 @@ export default function Ingredients() {
 
   const filtered = useMemo(() => items, [items]);
 
+  const {
+    page, setPage, pageItems, total, totalPages, from, to,
+  } = usePagination(
+    filtered,
+    10,
+    `${tab}|${category}|${supplier}|${status}|${q}`
+  );
+
   const grouped = useMemo(() => {
     const map = new Map();
-    for (const item of filtered) {
+    for (const item of pageItems) {
       const key = item.category_name || "Uncategorized";
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(item);
@@ -122,7 +131,7 @@ export default function Ingredients() {
       return ia - ib;
     });
     return names.map((name) => ({ name, items: map.get(name) }));
-  }, [filtered, categories]);
+  }, [pageItems, categories]);
 
   const renderActions = (i) => (
     <td className="row-actions">
@@ -393,6 +402,10 @@ export default function Ingredients() {
             </div>
           </section>
         ))}
+
+        {filtered.length > 0 && (
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+        )}
       </div>
 
       {rejecting && (

@@ -468,25 +468,16 @@ class ProductEvaluationSerializer(serializers.ModelSerializer):
                 "name": i.name,
                 "category_name": i.category.name if i.category_id else "",
             }
-            for i in obj.ingredients.select_related("category").all()
+            for i in obj.ingredients.all()
         ]
 
     def get_trial_titles(self, obj):
         return [{"id": t.id, "code": t.code, "title": t.title} for t in obj.trials.all()]
 
-    def _trials_for_product(self, obj):
-        trials = list(obj.trials.all())
-        if trials:
-            return trials
-        ingredient_ids = obj.ingredients.values_list("pk", flat=True)
-        if not ingredient_ids:
-            return []
-        return list(MealTrial.objects.filter(ingredients__id__in=ingredient_ids).distinct())
-
     def get_selling_price(self, obj):
         prices = [
             t.selling_price
-            for t in self._trials_for_product(obj)
+            for t in obj.trials.all()
             if t.selling_price is not None
         ]
         if not prices:
