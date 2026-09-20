@@ -134,6 +134,11 @@ export default function IngredientForm() {
     return payload;
   };
 
+  const navigateToIngredientsList = (ingredientId, isTrial) => {
+    const tab = isTrial ? "trial" : "approved";
+    navigate(`/ingredients?tab=${tab}&highlight=${ingredientId}`);
+  };
+
   const persist = async (password = "") => {
     const payload = buildPayload();
     if (needsSecretPassword()) {
@@ -147,11 +152,10 @@ export default function IngredientForm() {
         }
         setSecretConfirmOpen(false);
         setConfirmPassword("");
-        setToast("Ingredient submitted for approval.");
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
           navigate("/ingredients");
         } else {
-          navigate(`/ingredients/${data.id}`);
+          navigateToIngredientsList(data.id, !!data.is_trial);
         }
       } catch (err) {
         const detail = err.response?.data;
@@ -178,21 +182,7 @@ export default function IngredientForm() {
           navigate("/ingredients");
           return;
         }
-        setInitialSecret(!!data.is_secret);
-        setForm({
-          ...empty,
-          ...data,
-          category: data.category || "",
-          supplier: data.supplier || "",
-          shelf_life_days: data.shelf_life_days || "",
-          alternative_ids: data.alternative_ids || [],
-          secret_viewer_ids: data.secret_viewer_ids || [],
-          quantity: omrFieldValue(data.quantity),
-          price_per_unit: omrFieldValue(data.price_per_unit),
-        });
-        setHistory(data.price_history || []);
-        setPendingPhoto(null);
-        setToast("Ingredient saved successfully.");
+        navigateToIngredientsList(data.id, !!data.is_trial);
       } catch (err) {
         const detail = err.response?.data;
         if (detail?.confirm_password) {

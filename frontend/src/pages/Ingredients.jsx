@@ -35,6 +35,9 @@ export default function Ingredients() {
   const [notes, setNotes] = useState("");
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(true);
+  const [flashId, setFlashId] = useState("");
+  const [flashPhase, setFlashPhase] = useState("off"); // on | fading | off
+  const highlightParam = params.get("highlight");
 
   const load = (activeTab = tab) => {
     const query = new URLSearchParams({ tab: activeTab });
@@ -51,9 +54,54 @@ export default function Ingredients() {
   }, []);
 
   useEffect(() => {
+    const urlTab = params.get("tab") === "trial" ? "trial" : "approved";
+    setTab((prev) => (prev === urlTab ? prev : urlTab));
+  }, [params]);
+
+  // Capture highlight once from the URL, then strip it so re-renders don't re-trigger.
+  useEffect(() => {
+    if (!highlightParam) return;
+    setFlashId(String(highlightParam));
+    setFlashPhase("on");
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (!next.has("highlight")) return prev;
+      next.delete("highlight");
+      return next;
+    }, { replace: true });
+  }, [highlightParam, setSearchParams]);
+
+  useEffect(() => {
+    if (!flashId) return undefined;
+    const fadeTimer = setTimeout(() => setFlashPhase("fading"), 1400);
+    const clearTimer = setTimeout(() => {
+      setFlashId("");
+      setFlashPhase("off");
+    }, 2800);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [flashId]);
+
+  useEffect(() => {
+    if (!flashId || loading || flashPhase !== "on") return undefined;
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-ingredient-id="${CSS.escape(String(flashId))}"]`);
+      el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [flashId, loading, flashPhase, items]);
+
+  useEffect(() => {
     const timer = setTimeout(() => load(), q ? 250 : 0);
     return () => clearTimeout(timer);
   }, [tab, category, supplier, status, q]);
+
+  const flashClass = (id) => {
+    if (!flashId || String(id) !== String(flashId) || flashPhase === "off") return undefined;
+    return flashPhase === "fading" ? "row-highlight-fade" : "row-highlight";
+  };
 
   const filtered = useMemo(() => items, [items]);
 
@@ -269,7 +317,11 @@ export default function Ingredients() {
                 </thead>
                 <tbody>
                   {section.items.map((i) => (
-                    <tr key={i.id}>
+                    <tr
+                      key={i.id}
+                      data-ingredient-id={i.id}
+                      className={flashClass(i.id)}
+                    >
                       <td>{i.code}</td>
                       <td>
                         {i.photo ? <img className="thumb" src={i.photo} alt="" /> : null}
@@ -311,7 +363,11 @@ export default function Ingredients() {
             </div>
             <div className="stats-grid ingredient-section-grid">
               {section.items.map((i) => (
-                <div className="card card-pad" key={i.id}>
+                <div
+                  className={`card card-pad${flashClass(i.id) ? ` ${flashClass(i.id)}` : ""}`}
+                  key={i.id}
+                  data-ingredient-id={i.id}
+                >
                   {i.photo && <img className="trial-hero-photo" src={i.photo} alt="" style={{ maxHeight: 140, marginBottom: 8 }} />}
                   <div className="hint">{i.code}</div>
                   <h3 style={{ marginTop: 4 }}>{i.name}</h3>

@@ -1476,3 +1476,11 @@ td.row-actions > * + * {
   .password-field .form-input { padding-right: 2.75rem; }
   .login-submit { padding: 10px; font-size: 14px; margin-top: 4px; }
 }
+
+.row-highlight {
+  background-color: #fef3c7;
+}
+.row-highlight-fade {
+  background-color: transparent;
+  transition: background-color 1.4s ease;
+}
