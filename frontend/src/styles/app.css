@@ -609,10 +609,10 @@ html.edit-trial-page-open .page-header.sticky-form-header {
 }
 .chart-year-select {
   height: 32px;
-  padding: 0 28px 0 12px;
+  padding: 0 2rem 0 12px;
   border-radius: 999px;
   border: 1px solid #e5e7eb;
-  background: #fff;
+  background-color: #fff;
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
@@ -622,9 +622,12 @@ html.edit-trial-page-open .page-header.sticky-form-header {
   width: auto;
   flex-shrink: 0;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 0.5rem center;
+  background-size: 16px 16px;
   cursor: pointer;
 }
 
@@ -653,6 +656,19 @@ html.edit-trial-page-open .page-header.sticky-form-header {
 .search-field input { padding-left: 34px; width: 260px; }
 .textarea { height: auto; padding: 10px 12px; min-height: 90px; resize: vertical; width: 100%; }
 .input, .select { width: 100%; }
+.select,
+select.select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 16px 16px;
+  padding-right: 2rem;
+  cursor: pointer;
+}
 .tabs {
   display: flex;
   gap: 4px;

@@ -31,6 +31,8 @@ const empty = {
   secret_viewer_ids: [],
 };
 
+const STORAGE_OPTIONS = ["Freezer", "Chiller", "Room Temperature"];
+
 export default function IngredientForm() {
   const { id } = useParams();
   const isNew = !id || id === "new";
@@ -371,7 +373,20 @@ export default function IngredientForm() {
           </div>
           <div className="field">
             <label>Storage Conditions</label>
-            <input className="input" value={form.storage_conditions || ""} onChange={(e) => set("storage_conditions", e.target.value)} />
+            <select
+              className="select"
+              value={form.storage_conditions || ""}
+              onChange={(e) => set("storage_conditions", e.target.value)}
+            >
+              <option value="">Select</option>
+              {STORAGE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+              {form.storage_conditions
+                && !STORAGE_OPTIONS.includes(form.storage_conditions) && (
+                <option value={form.storage_conditions}>{form.storage_conditions}</option>
+              )}
+            </select>
           </div>
           <div className="field full">
             <PhotoUpload
