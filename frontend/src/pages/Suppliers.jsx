@@ -130,14 +130,25 @@ export function SupplierForm() {
     <div>
       <div className="page-header">
         <h1>{isNew ? "Add Supplier" : "Edit Supplier"}</h1>
-        <Link className="btn btn-back" to="/suppliers">Back</Link>
+        <div className="page-header-actions">
+          <Link className="btn btn-back" to="/suppliers">
+            <Icon name="back" />
+            Back
+          </Link>
+          {!loading && (
+            <button className="btn btn-save" type="submit" form="supplier-form">
+              <Icon name="save" />
+              Save
+            </button>
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="card card-pad"><Skeleton count={6} height={36} /></div>
       ) : (
-      <form className="card card-pad" onSubmit={save}>
+      <form id="supplier-form" className="card card-pad" onSubmit={save}>
         <div className="form-grid">
-          <div className="field"><label>Company Name</label><input className="input" required value={form.company_name} onChange={(e) => set("company_name", e.target.value)} /></div>
+          <div className="field"><label className="required">Company Name</label><input className="input" required value={form.company_name} onChange={(e) => set("company_name", e.target.value)} /></div>
           <div className="field"><label>Contact Person</label><input className="input" value={form.contact_person} onChange={(e) => set("contact_person", e.target.value)} /></div>
           <div className="field"><label>Phone</label><input className="input" value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
           <div className="field"><label>Email</label><input className="input" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></div>
@@ -154,10 +165,6 @@ export function SupplierForm() {
             <Stars value={form.rating} onChange={(v) => set("rating", v)} />
           </div>
           <div className="field full"><label>Notes</label><textarea className="textarea" value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
-        </div>
-        <div className="modal-actions">
-          <Link className="btn btn-back" to="/suppliers">Cancel</Link>
-          <button className="btn btn-primary">Save</button>
         </div>
       </form>
       )}

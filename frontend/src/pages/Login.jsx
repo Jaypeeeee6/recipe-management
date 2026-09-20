@@ -60,7 +60,7 @@ export default function Login() {
             {error && <div className="login-error">{error}</div>}
 
             <div className="form-group">
-              <label className="form-label" htmlFor="login-email">Email Address</label>
+              <label className="form-label required" htmlFor="login-email">Email Address</label>
               <input
                 id="login-email"
                 className="form-input"
@@ -72,7 +72,7 @@ export default function Login() {
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="login-password">Password</label>
+              <label className="form-label required" htmlFor="login-password">Password</label>
               <div className="password-field">
                 <input
                   id="login-password"

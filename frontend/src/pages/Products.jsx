@@ -347,15 +347,24 @@ export function ProductForm() {
               <Icon name="download" /> Export PDF
             </button>
           )}
-          <Link className="btn btn-back" to="/products">Back</Link>
+          <Link className="btn btn-back" to="/products">
+            <Icon name="back" />
+            Back
+          </Link>
+          {!loading && (
+            <button className="btn btn-save" type="submit" form="product-form">
+              <Icon name="save" />
+              Save
+            </button>
+          )}
         </div>
       </div>
       {loading ? (
         <div className="card card-pad"><Skeleton count={6} height={36} /></div>
       ) : (
-      <form className="card card-pad" onSubmit={save}>
+      <form id="product-form" className="card card-pad" onSubmit={save}>
         <div className="field">
-          <label>Product Name</label>
+          <label className="required">Product Name</label>
           <input className="input" required value={form.product_name} onChange={(e) => setForm({ ...form, product_name: e.target.value })} />
         </div>
 
@@ -430,9 +439,6 @@ export function ProductForm() {
             </div>
           </div>
         )}
-        <div className="modal-actions">
-          <button className="btn btn-primary">Save</button>
-        </div>
       </form>
       )}
     </div>

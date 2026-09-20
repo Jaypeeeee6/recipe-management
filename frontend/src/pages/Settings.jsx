@@ -155,20 +155,26 @@ export default function Settings() {
           onClose={() => setEditing(null)}
           actions={
             <>
-              <button className="btn btn-back" onClick={() => setEditing(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveUser}>Save</button>
+              <button className="btn btn-back" onClick={() => setEditing(null)}>
+                <Icon name="back" />
+                Cancel
+              </button>
+              <button className="btn btn-save" onClick={saveUser}>
+                <Icon name="save" />
+                Save
+              </button>
             </>
           }
         >
-          <div className="field"><label>Full Name</label><input className="input" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
-          <div className="field" style={{ marginTop: 10 }}><label>Email</label><input className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+          <div className="field"><label className="required">Full Name</label><input className="input" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
+          <div className="field" style={{ marginTop: 10 }}><label className="required">Email</label><input className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
           <div className="field" style={{ marginTop: 10 }}>
-            <label>Role</label>
+            <label className="required">Role</label>
             <select className="select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
               {ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
-          <div className="field" style={{ marginTop: 10 }}><label>Password</label><input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
+          <div className="field" style={{ marginTop: 10 }}><label className={editing === "new" ? "required" : undefined}>Password{editing === "edit" ? <span className="hint"> (leave blank to keep)</span> : null}</label><input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
         </Modal>
       )}
     </div>

@@ -263,13 +263,24 @@ export default function IngredientForm() {
   return (
     <div>
       {toast && <div className="toast">{toast}</div>}
+      <div className="page-breadcrumb hint">
+        <Link to="/ingredients">Ingredients</Link> / {isNew ? "Add" : form.name}
+      </div>
       <div className="page-header">
         <div>
-          <div className="hint"><Link to="/ingredients">Ingredients</Link> / {isNew ? "Add" : form.name}</div>
           <h1>{isNew ? "Add Ingredient" : "Edit Ingredient"}</h1>
         </div>
         <div className="page-header-actions">
-          <Link className="btn btn-back" to="/ingredients">Back</Link>
+          <Link className="btn btn-back" to="/ingredients">
+            <Icon name="back" />
+            Back
+          </Link>
+          {!loading && (
+            <button className="btn btn-save" type="submit" form="ingredient-form">
+              <Icon name="save" />
+              Save
+            </button>
+          )}
           {!isNew && canApprove && <button type="button" className="btn btn-primary" onClick={approve}><Icon name="check" /> Approve</button>}
           {!isNew && canReject && <button type="button" className="btn btn-danger" onClick={() => setRejecting(true)}><Icon name="reject" /> Reject</button>}
         </div>
@@ -288,10 +299,10 @@ export default function IngredientForm() {
         </div>
       )}
 
-      <form className="card card-pad" onSubmit={save}>
+      <form id="ingredient-form" className="card card-pad" onSubmit={save}>
         <div className="form-grid">
           <div className="field">
-            <label>Ingredient Name</label>
+            <label className="required">Ingredient Name</label>
             <input className="input" required value={form.name} onChange={(e) => set("name", e.target.value)} />
           </div>
           <div className="field">
@@ -309,7 +320,7 @@ export default function IngredientForm() {
             </div>
           </div>
           <div className="field">
-            <label>Category</label>
+            <label className="required">Category</label>
             <select className="select" required value={form.category} onChange={(e) => set("category", e.target.value)}>
               <option value="">Select</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -466,10 +477,6 @@ export default function IngredientForm() {
           </>
         )}
 
-        <div className="modal-actions">
-          <Link className="btn btn-back" to="/ingredients">Cancel</Link>
-          <button className="btn btn-primary" type="submit">Save</button>
-        </div>
       </form>
 
       {secretConfirmOpen && (
@@ -491,9 +498,11 @@ export default function IngredientForm() {
                   setConfirmError("");
                 }}
               >
+                <Icon name="back" />
                 Cancel
               </button>
-              <button className="btn btn-primary" type="button" onClick={confirmSecretSave}>
+              <button className="btn btn-save" type="button" onClick={confirmSecretSave}>
+                <Icon name="save" />
                 Confirm &amp; Save
               </button>
             </>
@@ -501,7 +510,7 @@ export default function IngredientForm() {
         >
           <p>Enter your account password to mark this as a secret ingredient.</p>
           <div className="field" style={{ marginTop: 12 }}>
-            <label>Password</label>
+            <label className="required">Password</label>
             <input
               className="input"
               type="password"
@@ -536,7 +545,7 @@ export default function IngredientForm() {
         >
           <p>Reason for rejecting {form.name}</p>
           <div className="field" style={{ marginTop: 12 }}>
-            <label>Reason</label>
+            <label className="required">Reason</label>
             <select className="select" value={reason} onChange={(e) => setReason(e.target.value)}>
               <option value="taste">Taste</option>
               <option value="price">Price</option>

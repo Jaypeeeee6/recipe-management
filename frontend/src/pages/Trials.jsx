@@ -15,8 +15,10 @@ import Modal from "../components/Modal";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
+import Money from "../components/Money";
+import PhotoGallery from "../components/PhotoGallery";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
-import { foodCostLabel, foodCostTone, formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, sanitizeOmrDecimalInput } from "../utils/format";
+import { foodCostLabel, foodCostTone, formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, sanitizeOmrDecimalInput, verdictLabel } from "../utils/format";
 import { canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 
@@ -321,7 +323,7 @@ export function TrialList() {
         >
           <p>Reason for rejecting {rejecting.title}</p>
           <div className="field" style={{ marginTop: 12 }}>
-            <label>Reason</label>
+            <label className="required">Reason</label>
             <select className="select" value={reason} onChange={(e) => setReason(e.target.value)}>
               <option value="taste">Taste</option>
               <option value="price">Price</option>
@@ -376,6 +378,11 @@ export function TrialForm() {
   const [dishPhoto, setDishPhoto] = useState("");
   const [saveError, setSaveError] = useState("");
   const [loading, setLoading] = useState(!isNew);
+
+  useEffect(() => {
+    document.documentElement.classList.add("edit-trial-page-open");
+    return () => document.documentElement.classList.remove("edit-trial-page-open");
+  }, []);
 
   useEffect(() => {
     api.get("/ingredients/?tab=approved").then((r) => setIngredients(r.data));
@@ -555,19 +562,30 @@ export function TrialForm() {
   ).slice(0, 8);
 
   return (
-    <div>
-      <div className="page-header">
-        <h1>{isNew ? "New Trial" : "Edit Trial"}</h1>
-        <Link className="btn btn-back" to={isNew ? "/trials" : `/trials/${id}`}>Back</Link>
+    <div className="edit-trial-page">
+      <div className="page-header sticky-form-header">
+        <h1>{isNew ? "New Trial" : `Edit Trial: ${form.title || "…"}`}</h1>
+        <div className="page-header-actions">
+          <Link className="btn btn-back" to={isNew ? "/trials" : `/trials/${id}`}>
+            <Icon name="back" />
+            Back
+          </Link>
+          {!loading && (
+            <button className="btn btn-save" type="submit" form="trial-form">
+              <Icon name="save" />
+              Save
+            </button>
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="card card-pad"><Skeleton count={8} height={36} /></div>
       ) : (
-      <form className="card card-pad" onSubmit={save}>
+      <form id="trial-form" className="card card-pad" onSubmit={save}>
         {saveError && <div className="alert alert-warn" style={{ marginBottom: 16 }}>{saveError}</div>}
         <div className="form-grid">
           <div className="field full">
-            <label>Trial Title / Meal Name</label>
+            <label className="required">Trial Title / Meal Name</label>
             <input className="input" required value={form.title} onChange={(e) => set("title", e.target.value)} />
           </div>
           <div className="field full">
@@ -599,7 +617,7 @@ export function TrialForm() {
             <input className="input" type="date" value={form.trial_date || ""} onChange={(e) => set("trial_date", e.target.value)} />
           </div>
           <div className="field expiry-panel">
-            <label>Trial expiry (required)</label>
+            <label className="required">Trial expiry</label>
             <div className="expiry-row">
               <input
                 className="input"
@@ -648,7 +666,7 @@ export function TrialForm() {
 
         <h3 style={{ marginTop: 20 }}>Recipe Ingredients</h3>
         <p className="hint" style={{ marginBottom: 12 }}>
-          Unit price is OMR per stock unit (e.g. per kg). Line cost is calculated from quantity — e.g. 5 OMR/kg × 1 g = 0.005 OMR for that line.
+          Unit price is OMR per stock unit (e.g. per kg). Line cost is calculated from quantity — e.g. OMR 5/kg × 1 g = OMR 0.005 for that line.
         </p>
         <input className="input" placeholder="Search to add an ingredient…" value={ingSearch} onChange={(e) => setIngSearch(e.target.value)} style={{ maxWidth: 360 }} />
         {matches.map((i) => (
@@ -812,9 +830,6 @@ export function TrialForm() {
           <label>Notes / Observations</label>
           <textarea className="textarea" value={form.notes} onChange={(e) => set("notes", e.target.value)} />
         </div>
-        <div className="modal-actions">
-          <button className="btn btn-primary">Save</button>
-        </div>
       </form>
       )}
     </div>
@@ -878,7 +893,10 @@ export function TrialDetail() {
     return (
       <div>
         <div className="empty">{loadError}</div>
-        <Link className="btn btn-back" to="/trials" style={{ marginTop: 16 }}>Back to Meal Trials</Link>
+        <Link className="btn btn-back" to="/trials" style={{ marginTop: 16 }}>
+          <Icon name="back" />
+          Back to Meal Trials
+        </Link>
       </div>
     );
   }
@@ -919,11 +937,12 @@ export function TrialDetail() {
   ];
 
   const printRecipe = () => {
+    const generatedAt = formatDateTime(new Date());
     const html = `<html><head><title>${trial.title}</title>
-      <style>body{font-family:Segoe UI,sans-serif;padding:32px;color:#111}h1{margin:0}table{width:100%;border-collapse:collapse;margin-top:16px}td,th{border-bottom:1px solid #ddd;padding:8px;text-align:left}</style>
+      <style>body{font-family:Segoe UI,sans-serif;padding:32px;color:#111}h1{margin:0}p.meta{color:#555;margin:6px 0 0}table{width:100%;border-collapse:collapse;margin-top:16px}td,th{border-bottom:1px solid #ddd;padding:8px;text-align:left}</style>
       </head><body>
-      <h1>Successful Dish Recipe</h1>
-      <p>${trial.code} · ${trial.title}</p>
+      <h1>${trial.code} · ${trial.title}</h1>
+      <p class="meta">Generated ${generatedAt}</p>
       ${trial.cooking_temperature ? `<p>Temperature: ${trial.cooking_temperature}°C</p>` : ""}
       ${trial.cooking_duration ? `<p>Duration: ${trial.cooking_duration} min</p>` : ""}
       ${trial.expiry_amount ? `<p>Expires after: ${trial.expiry_amount} ${trial.expiry_unit} (from trial date)${trial.expiry_remaining_label ? ` — ${trial.expiry_remaining_label}` : ""}</p>` : ""}
@@ -944,12 +963,19 @@ export function TrialDetail() {
   return (
     <div>
       {toast && <div className="toast">{toast}</div>}
+      <div className="page-breadcrumb hint">
+        <Link to="/trials">Meal Trials</Link>
+      </div>
       <div className="page-header">
         <div>
-          <div className="hint"><Link to="/trials">Meal Trials</Link> / {trial.code}</div>
-          <h1>{trial.title}</h1>
+          <h1 className="page-title-with-badge">
+            {trial.title}
+            {(trial.expiry_status === "expiring_soon" || trial.expiry_status === "expired") && (
+              <StatusBadge value={trial.expiry_status} kind="expiry" />
+            )}
+          </h1>
           <p>
-            {trial.conducted_by} · {trial.trial_date} · Repetition #{trial.repetition_number}
+            {trial.code} · {trial.conducted_by} · {trial.trial_date} · Repetition #{trial.repetition_number}
             {trial.expiry_amount ? ` · Shelf life ${trial.expiry_amount} ${trial.expiry_unit}` : ""}
           </p>
         </div>
@@ -965,25 +991,35 @@ export function TrialDetail() {
         </div>
       </div>
 
-      {(trial.final_dish_photo || trial.photo) && (
-        <img
-          className="trial-hero-photo"
-          src={trial.final_dish_photo || trial.photo}
-          alt={trial.title}
-        />
-      )}
+      <PhotoGallery
+        photos={[trial.final_dish_photo, trial.photo]}
+        alt={trial.title}
+      />
 
-      <div className="stats-grid">
-        <div className="stat-card ok"><div className="label">Success Rate</div><div className="value">{trial.success_rate}%</div></div>
-        <div className="stat-card"><div className="label">Decision</div><div className="value" style={{ fontSize: 16, marginTop: 10 }}><StatusBadge value={trial.verdict} kind="verdict" /></div></div>
-        <div className="stat-card"><div className="label">Cost / Serving</div><div className="value" style={{ fontSize: 18 }}>{formatMoney(trial.cost_summary?.cost_per_serving)}</div></div>
-        <div className="stat-card"><div className="label">Committee Ratings</div><div className="value">{trial.committee_count || 0}</div></div>
-        <div className={`stat-card ${trial.expiry_status === "expired" ? "danger" : trial.expiry_status === "expiring_soon" ? "warn" : ""}`}>
-          <div className="label">Expiry</div>
-          <div className="value" style={{ fontSize: 16, marginTop: 10 }}>
-            {trial.expiry_status ? <StatusBadge value={trial.expiry_status} kind="expiry" /> : "No expiry"}
+      <div className="stats-grid dashboard-stats-grid">
+        <div className="stat-card ok">
+          <div className="stat-card-body">
+            <div className="label">Success Rate</div>
+            <div className="value">{trial.success_rate}%</div>
           </div>
-          {trial.expiry_remaining_label && <div className="hint">{trial.expiry_remaining_label}</div>}
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-body">
+            <div className="label">Decision</div>
+            <div className={`value decision-${trial.verdict || "pending"}`}>{verdictLabel(trial.verdict)}</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-body">
+            <div className="label">Cost / Serving</div>
+            <div className="value"><Money value={trial.cost_summary?.cost_per_serving} exponent /></div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-body">
+            <div className="label">Committee Ratings</div>
+            <div className="value">{trial.committee_count || 0}</div>
+          </div>
         </div>
       </div>
 
@@ -1135,7 +1171,7 @@ export function TrialDetail() {
         >
           <p>Reason for rejecting {trial.title}</p>
           <div className="field" style={{ marginTop: 12 }}>
-            <label>Reason</label>
+            <label className="required">Reason</label>
             <select className="select" value={reason} onChange={(e) => setReason(e.target.value)}>
               <option value="taste">Taste</option>
               <option value="price">Price</option>

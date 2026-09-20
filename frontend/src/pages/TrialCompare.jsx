@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/client";
+import Icon from "../components/Icon";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
@@ -175,7 +176,10 @@ export default function TrialCompare() {
           <h1>Compare Trials</h1>
           <p>Pick 2–{MAX_COMPARE} trials to see which performs better on each metric</p>
         </div>
-        <Link className="btn btn-back" to="/trials">Back</Link>
+        <Link className="btn btn-back" to="/trials">
+          <Icon name="back" />
+          Back
+        </Link>
       </div>
 
       <div className="card card-pad" style={{ marginBottom: 16 }}>

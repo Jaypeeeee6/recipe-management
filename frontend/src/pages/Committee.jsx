@@ -95,7 +95,7 @@ export default function Committee() {
               </p>
             </div>
             <label className="field">
-              <span style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Your Full Name</span>
+              <span className="required-label" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Your Full Name</span>
               <input className="input" placeholder="e.g. John Smith" value={name} onChange={(e) => { setName(e.target.value); setNameError(""); }} />
               {nameError && <div className="hint" style={{ color: "#ef4444" }}>{nameError}</div>}
             </label>
@@ -119,7 +119,7 @@ export default function Committee() {
           <h2 style={{ marginTop: 0 }}>Rate this dish</h2>
           {Object.keys(LABELS).map((k) => (
             <div className="list-row" key={k}>
-              <strong>{LABELS[k]}</strong>
+              <strong className="required-label">{LABELS[k]}</strong>
               <Stars value={ratings[k]} onChange={(v) => setRatings({ ...ratings, [k]: v })} />
             </div>
           ))}

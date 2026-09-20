@@ -1,10 +1,12 @@
 export default function Stars({ value = 0, onChange, size = 18 }) {
   const n = Number(value) || 0;
+  const filled = Math.round(n);
+  const empty = Math.max(0, 5 - filled);
   if (!onChange) {
     return (
       <span className="stars" title={`${n} stars`} style={{ fontSize: size }}>
-        {"★".repeat(Math.round(n))}
-        {"☆".repeat(Math.max(0, 5 - Math.round(n)))}
+        <span className="stars-filled">{"★".repeat(filled)}</span>
+        <span className="stars-empty">{"☆".repeat(empty)}</span>
       </span>
     );
   }

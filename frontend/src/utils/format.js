@@ -7,7 +7,11 @@ export function formatExpiryUnit(amount, unit) {
 
 export function formatMoney(value) {
   const n = Number(value || 0);
-  return `${n.toFixed(3)} OMR`;
+  return `OMR ${n.toFixed(3)}`;
+}
+
+export function moneyAmount(value) {
+  return Number(value || 0).toFixed(3);
 }
 
 /** Keep user-typed OMR decimals intact while editing (e.g. 1, 1.2, 1.200). */

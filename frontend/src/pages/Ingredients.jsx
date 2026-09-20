@@ -352,7 +352,7 @@ export default function Ingredients() {
         >
           <p>Reason for rejecting {rejecting.name}</p>
           <div className="field" style={{ marginTop: 12 }}>
-            <label>Reason</label>
+            <label className="required">Reason</label>
             <select className="select" value={reason} onChange={(e) => setReason(e.target.value)}>
               <option value="taste">Taste</option>
               <option value="price">Price</option>
