@@ -46,6 +46,11 @@ class AuditLogAdmin(admin.ModelAdmin):
     search_fields = ("summary", "entity_id", "actor__email")
 
 
+@admin.register(m.LabSettings)
+class LabSettingsAdmin(admin.ModelAdmin):
+    list_display = ("expiry_alert_email", "expiry_alerts_enabled", "last_expiry_alert_run", "updated_at")
+
+
 @admin.register(m.CommitteeRating)
 class CommitteeRatingAdmin(admin.ModelAdmin):
     list_display = ("trial", "member_name", "overall", "submitted_at")

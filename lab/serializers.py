@@ -7,6 +7,7 @@ from .models import (
     CommitteeRating,
     Ingredient,
     IngredientPriceHistory,
+    LabSettings,
     MealTrial,
     PrepStep,
     ProductEvaluation,
@@ -17,6 +18,7 @@ from .models import (
 )
 from .permissions import (
     can_clear_data,
+    can_manage_lab_settings,
     can_manage_secret_access,
     can_manage_users,
     can_see_secrets,
@@ -48,9 +50,46 @@ class UserSerializer(serializers.ModelSerializer):
             "can_see_secrets": can_see_secrets(obj),
             "can_manage_users": can_manage_users(obj),
             "can_manage_secret_access": can_manage_secret_access(obj),
+            "can_manage_lab_settings": can_manage_lab_settings(obj),
             "can_view_audit": can_view_audit(obj),
             "can_clear_data": can_clear_data(obj),
         }
+
+
+class LabSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabSettings
+        fields = [
+            "expiry_alert_email",
+            "expiry_alerts_enabled",
+            "last_expiry_alert_run",
+            "updated_at",
+        ]
+        read_only_fields = ["last_expiry_alert_run", "updated_at"]
+
+    def validate_expiry_alert_email(self, value):
+        import re
+
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from django.core.validators import validate_email
+
+        raw = value or ""
+        parts = [p.strip() for p in re.split(r"[\s,;]+", raw) if p.strip()]
+        if not parts:
+            return ""
+        cleaned = []
+        seen = set()
+        for part in parts:
+            try:
+                validate_email(part)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(f"Invalid email: {part}") from exc
+            key = part.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(part)
+        return ", ".join(cleaned)
 
 
 class UserWriteSerializer(serializers.Serializer):

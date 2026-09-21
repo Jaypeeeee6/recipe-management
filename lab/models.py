@@ -165,6 +165,8 @@ class Ingredient(models.Model):
     alternatives = models.ManyToManyField(
         "self", blank=True, symmetrical=False, related_name="alternative_for"
     )
+    # When set to the current expiry_date, an expiring-soon email was already sent.
+    expiry_alert_sent_for = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -248,6 +250,8 @@ class MealTrial(models.Model):
         max_length=10, choices=ExpiryUnit.choices, default=ExpiryUnit.DAYS, blank=True
     )
     expires_at = models.DateTimeField(null=True, blank=True)
+    # When set equal to expires_at, an expiring-soon email was already sent for this trial.
+    expiry_alert_sent_for = models.DateTimeField(null=True, blank=True)
     parent_trial = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -414,3 +418,43 @@ class CommitteeRating(models.Model):
 
     class Meta:
         ordering = ["-submitted_at"]
+
+
+class LabSettings(models.Model):
+    """Singleton lab-wide settings (managed by IT)."""
+
+    expiry_alert_email = models.TextField(
+        blank=True,
+        help_text="Recipients for meal trial expiring-soon emails (comma or newline separated).",
+    )
+    expiry_alerts_enabled = models.BooleanField(default=True)
+    last_expiry_alert_run = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Lab settings"
+        verbose_name_plural = "Lab settings"
+
+    def __str__(self):
+        return "Lab settings"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def expiry_alert_recipients(self):
+        """Parse stored emails into a unique ordered list."""
+        import re
+
+        raw = self.expiry_alert_email or ""
+        parts = re.split(r"[\s,;]+", raw)
+        seen = set()
+        emails = []
+        for part in parts:
+            email = part.strip().lower()
+            if not email or email in seen:
+                continue
+            seen.add(email)
+            emails.append(email)
+        return emails

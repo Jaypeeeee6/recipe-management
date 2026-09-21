@@ -6,13 +6,13 @@ import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
-import { canClearData, canManageUsers, canViewAudit, canWrite, roleLabel } from "../utils/roles";
+import { canClearData, canManageLabSettings, canManageUsers, canViewAudit, canWrite, roleLabel } from "../utils/roles";
 
 const ROLES = [
   ["admin", "Admin — full access including secret ingredients"],
   ["staff", "Staff — full access except secret ingredients"],
   ["viewer", "Viewer — read-only"],
-  ["it", "IT — secrets, audit logs, register & manage accounts"],
+  ["it", "IT — secrets, audit logs, accounts, expiry alert email"],
 ];
 
 export default function Settings() {
@@ -23,11 +23,20 @@ export default function Settings() {
   const [form, setForm] = useState({ display_name: "", email: "", role: "staff", password: "" });
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(true);
+  const [labSettings, setLabSettings] = useState({
+    expiry_alert_email: "",
+    expiry_alerts_enabled: true,
+    last_expiry_alert_run: null,
+  });
+  const [alertSaving, setAlertSaving] = useState(false);
 
   const load = () => {
     const requests = [api.get("/categories/").then((r) => setCategories(r.data))];
     if (canManageUsers(user)) {
       requests.push(api.get("/users/").then((r) => setUsers(r.data)));
+    }
+    if (canManageLabSettings(user)) {
+      requests.push(api.get("/settings/lab/").then((r) => setLabSettings(r.data)));
     }
     Promise.all(requests).finally(() => setLoading(false));
   };
@@ -72,6 +81,44 @@ export default function Settings() {
     setToast("Operational data cleared. Re-run seed_lab to restore demo data.");
   };
 
+  const saveLabSettings = async () => {
+    setAlertSaving(true);
+    try {
+      const { data } = await api.patch("/settings/lab/", {
+        expiry_alert_email: labSettings.expiry_alert_email,
+        expiry_alerts_enabled: labSettings.expiry_alerts_enabled,
+      });
+      setLabSettings(data);
+      setToast("Expiry alert settings saved.");
+    } catch (err) {
+      setToast(err.response?.data?.detail || "Could not save alert settings.");
+    } finally {
+      setAlertSaving(false);
+    }
+  };
+
+  const sendAlertsNow = async () => {
+    setAlertSaving(true);
+    try {
+      const { data } = await api.post("/settings/send-expiry-alerts/");
+      if (data.sent) {
+        setToast(`Alert emailed to ${data.recipient} (${data.count} ingredient(s)).`);
+      } else if (data.skipped === "none_pending") {
+        setToast("No new expiring-soon ingredients to email.");
+      } else if (data.skipped === "no_recipient") {
+        setToast("Set an alert email first.");
+      } else {
+        setToast(`No email sent (${data.skipped || "unknown"}).`);
+      }
+      const refreshed = await api.get("/settings/lab/");
+      setLabSettings(refreshed.data);
+    } catch (err) {
+      setToast(err.response?.data?.detail || "Could not send alerts.");
+    } finally {
+      setAlertSaving(false);
+    }
+  };
+
   const {
     page, setPage, pageItems, total, totalPages, from, to,
   } = usePagination(users, 10, String(users.length));
@@ -94,8 +141,51 @@ export default function Settings() {
         <div className="list-row"><strong>Admin</strong><span className="hint">Full lab access, secrets, and who may see each secret</span></div>
         <div className="list-row"><strong>Staff</strong><span className="hint">Can mark secrets; sees them only if Admin grants access</span></div>
         <div className="list-row"><strong>Viewer</strong><span className="hint">Read-only; sees secrets only if Admin grants access</span></div>
-        <div className="list-row"><strong>IT</strong><span className="hint">Secrets, audit logs, and only role that can register/manage accounts</span></div>
+        <div className="list-row"><strong>IT</strong><span className="hint">Secrets, audit logs, accounts, and expiry alert email</span></div>
       </div>
+
+      {canManageLabSettings(user) && (
+        <div className="card card-pad" style={{ marginBottom: 16 }}>
+          <h3>Meal Trial Expiry Email Alerts</h3>
+          <p className="hint">
+            Emails are sent when a meal trial is expiring soon: last 5 hours if shelf life is in hours,
+            or last 1 day if shelf life is in days. Ingredients are not included.
+            Alerts also run automatically when someone opens the dashboard (about every 30 minutes).
+          </p>
+          <div className="field" style={{ marginTop: 12, maxWidth: 520 }}>
+            <label>Alert recipient emails</label>
+            <textarea
+              className="textarea"
+              rows={4}
+              placeholder={"alerts@company.com\nchef@company.com"}
+              value={labSettings.expiry_alert_email || ""}
+              onChange={(e) => setLabSettings({ ...labSettings, expiry_alert_email: e.target.value })}
+            />
+            <div className="hint">One per line, or separated by commas.</div>
+          </div>
+          <label className="remember" style={{ display: "block", marginTop: 12 }}>
+            <input
+              type="checkbox"
+              checked={!!labSettings.expiry_alerts_enabled}
+              onChange={(e) => setLabSettings({ ...labSettings, expiry_alerts_enabled: e.target.checked })}
+            />
+            Enable automatic expiry emails
+          </label>
+          {labSettings.last_expiry_alert_run && (
+            <div className="hint" style={{ marginTop: 8 }}>
+              Last check: {new Date(labSettings.last_expiry_alert_run).toLocaleString()}
+            </div>
+          )}
+          <div className="modal-actions" style={{ marginTop: 16, justifyContent: "flex-start" }}>
+            <button className="btn btn-primary" type="button" disabled={alertSaving} onClick={saveLabSettings}>
+              Save Alert Settings
+            </button>
+            <button className="btn btn-ghost" type="button" disabled={alertSaving} onClick={sendAlertsNow}>
+              Send Alerts Now
+            </button>
+          </div>
+        </div>
+      )}
 
       {canManageUsers(user) && (
         <div className="card card-pad" style={{ marginBottom: 16 }}>

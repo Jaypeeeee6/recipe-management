@@ -20,6 +20,8 @@ urlpatterns = [
     path("reports/", views.reports_view),
     path("audit-logs/", views.audit_logs_view),
     path("settings/clear-data/", views.clear_all_data),
+    path("settings/lab/", views.lab_settings_view),
+    path("settings/send-expiry-alerts/", views.send_expiry_alerts_now),
     path("public/trials/<int:pk>/", views.public_trial_view),
     path("public/trials/<int:pk>/committee-ratings/", views.public_committee_submit),
     path("trials/<int:pk>/committee-ratings/", views.trial_committee_ratings),

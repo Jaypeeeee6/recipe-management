@@ -15,6 +15,7 @@ export function perms(user) {
     can_see_secrets: false,
     can_manage_users: false,
     can_manage_secret_access: false,
+    can_manage_lab_settings: false,
     can_view_audit: false,
     can_clear_data: false,
   };
@@ -34,6 +35,11 @@ export function canManageUsers(user) {
 
 export function canManageSecretAccess(user) {
   return !!perms(user).can_manage_secret_access;
+}
+
+export function canManageLabSettings(user) {
+  // IT role always manages alert email; also honor API permission flag.
+  return user?.role === "it" || !!perms(user).can_manage_lab_settings;
 }
 
 export function canViewAudit(user) {

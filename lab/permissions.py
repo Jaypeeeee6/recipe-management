@@ -60,6 +60,11 @@ def can_manage_users(user):
     return is_it(user)
 
 
+def can_manage_lab_settings(user):
+    """Only IT can configure system alert email and related lab settings."""
+    return is_it(user)
+
+
 def can_view_audit(user):
     """Admin and IT can view audit logs."""
     return user_role(user) in (Role.ADMIN, Role.IT)

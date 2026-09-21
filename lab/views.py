@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .audit import log_action
+from .expiry_alerts import maybe_run_expiry_alerts, send_trial_expiry_alerts
 from .models import (
     AuditLog,
     Category,
@@ -20,6 +21,7 @@ from .models import (
     ExpiryUnit,
     Ingredient,
     IngredientPriceHistory,
+    LabSettings,
     MealTrial,
     ProductEvaluation,
     Role,
@@ -31,6 +33,7 @@ from .models import (
 from .permissions import (
     IsAuthenticatedReadOrWriteRole,
     can_clear_data,
+    can_manage_lab_settings,
     can_manage_secret_access,
     can_manage_users,
     can_view_audit,
@@ -45,6 +48,7 @@ from .serializers import (
     CommitteeRatingSerializer,
     IngredientDetailSerializer,
     IngredientListSerializer,
+    LabSettingsSerializer,
     MealTrialDetailSerializer,
     MealTrialListSerializer,
     ProductEvaluationSerializer,
@@ -610,6 +614,7 @@ def me_view(request):
 @api_view(["GET"])
 def dashboard_view(request):
     expire_overdue_trials()
+    maybe_run_expiry_alerts()
     today = timezone.localdate()
     ingredients = Ingredient.objects.select_related("category", "supplier")
     visibility = visible_ingredients_q(request.user)
@@ -1019,6 +1024,45 @@ def audit_logs_view(request):
         )
     limit = min(int(request.query_params.get("limit") or 200), 500)
     return Response(AuditLogSerializer(qs[:limit], many=True).data)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def lab_settings_view(request):
+    if not can_manage_lab_settings(request.user):
+        return Response({"detail": "IT only."}, status=status.HTTP_403_FORBIDDEN)
+    lab = LabSettings.get_solo()
+    if request.method == "GET":
+        return Response(LabSettingsSerializer(lab).data)
+    ser = LabSettingsSerializer(lab, data=request.data, partial=True)
+    ser.is_valid(raise_exception=True)
+    ser.save()
+    log_action(
+        request=request,
+        action="update",
+        entity_type="lab_settings",
+        entity_id=lab.id,
+        summary="Updated expiry alert settings",
+    )
+    return Response(LabSettingsSerializer(lab).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def send_expiry_alerts_now(request):
+    if not can_manage_lab_settings(request.user):
+        return Response({"detail": "IT only."}, status=status.HTTP_403_FORBIDDEN)
+    result = send_trial_expiry_alerts(force=True)
+    if result.get("error"):
+        return Response({"detail": result["error"], **result}, status=500)
+    log_action(
+        request=request,
+        action="send_expiry_alerts",
+        entity_type="lab_settings",
+        summary=f"Triggered expiry alerts ({result.get('count', 0)} trials)",
+        metadata=result,
+    )
+    return Response(result)
 
 
 @api_view(["POST"])
