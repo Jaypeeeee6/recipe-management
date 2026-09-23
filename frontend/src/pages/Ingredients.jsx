@@ -19,13 +19,19 @@ function canRejectIngredient(item) {
   return !item.is_trial || item.trial_status === "testing";
 }
 
+const INGREDIENT_TABS = ["approved", "trial", "secret"];
+
+function normalizeTab(value) {
+  return INGREDIENT_TABS.includes(value) ? value : "approved";
+}
+
 export default function Ingredients() {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [params, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useState(params.get("tab") === "trial" ? "trial" : "approved");
+  const [tab, setTab] = useState(normalizeTab(params.get("tab")));
   const [category, setCategory] = useState("");
   const [supplier, setSupplier] = useState("");
   const [status, setStatus] = useState("");
@@ -55,7 +61,7 @@ export default function Ingredients() {
   }, []);
 
   useEffect(() => {
-    const urlTab = params.get("tab") === "trial" ? "trial" : "approved";
+    const urlTab = normalizeTab(params.get("tab"));
     setTab((prev) => (prev === urlTab ? prev : urlTab));
   }, [params]);
 
@@ -165,9 +171,10 @@ export default function Ingredients() {
   const approve = async (id) => {
     await api.post(`/ingredients/${id}/approve/`);
     showToast("Ingredient approved.");
-    setTab("approved");
-    setSearchParams({ tab: "approved" });
-    load("approved");
+    const nextTab = items.find((item) => item.id === id)?.is_secret ? "secret" : "approved";
+    setTab(nextTab);
+    setSearchParams({ tab: nextTab });
+    load(nextTab);
   };
 
   const reject = async () => {
@@ -178,9 +185,10 @@ export default function Ingredients() {
     setRejecting(null);
     setNotes("");
     showToast("Ingredient rejected.");
-    setTab("trial");
-    setSearchParams({ tab: "trial" });
-    load("trial");
+    const nextTab = rejecting.is_secret ? "secret" : "trial";
+    setTab(nextTab);
+    setSearchParams({ tab: nextTab });
+    load(nextTab);
   };
 
   const remove = async (item) => {
@@ -207,7 +215,11 @@ export default function Ingredients() {
         items: filtered,
         grouped,
         filters: {
-          tabLabel: tab === "trial" ? "Pending / Rejected" : "Approved Ingredients",
+          tabLabel: tab === "trial"
+            ? "Pending / Rejected"
+            : tab === "secret"
+              ? "Secret Ingredients"
+              : "Approved Ingredients",
           search: q.trim(),
           categoryLabel,
           supplierLabel,
@@ -267,6 +279,16 @@ export default function Ingredients() {
         >
           Pending / Rejected
         </button>
+        <button
+          type="button"
+          className={`tab ${tab === "secret" ? "active" : ""}`}
+          onClick={() => {
+            setTab("secret");
+            setSearchParams({ tab: "secret" });
+          }}
+        >
+          Secret
+        </button>
       </div>
 
       <div className="card">
@@ -300,7 +322,15 @@ export default function Ingredients() {
           </button>
         </div>
 
-        {loading ? <Skeleton count={6} /> : filtered.length === 0 && <div className="empty">{tab === "trial" ? "No trial products yet." : "No ingredients found."}</div>}
+        {loading ? <Skeleton count={6} /> : filtered.length === 0 && (
+          <div className="empty">
+            {tab === "trial"
+              ? "No trial products yet."
+              : tab === "secret"
+                ? "No secret ingredients."
+                : "No ingredients found."}
+          </div>
+        )}
 
         {view === "table" && filtered.length > 0 && grouped.map((section) => (
           <section key={section.name} className="ingredient-section">

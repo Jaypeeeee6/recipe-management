@@ -136,8 +136,8 @@ export default function IngredientForm() {
     return payload;
   };
 
-  const navigateToIngredientsList = (ingredientId, isTrial) => {
-    const tab = isTrial ? "trial" : "approved";
+  const navigateToIngredientsList = (ingredientId, isTrial, isSecret) => {
+    const tab = isSecret ? "secret" : isTrial ? "trial" : "approved";
     navigate(`/ingredients?tab=${tab}&highlight=${ingredientId}`);
   };
 
@@ -157,7 +157,7 @@ export default function IngredientForm() {
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
           navigate("/ingredients");
         } else {
-          navigateToIngredientsList(data.id, !!data.is_trial);
+          navigateToIngredientsList(data.id, !!data.is_trial, !!data.is_secret);
         }
       } catch (err) {
         const detail = err.response?.data;
@@ -184,7 +184,7 @@ export default function IngredientForm() {
           navigate("/ingredients");
           return;
         }
-        navigateToIngredientsList(data.id, !!data.is_trial);
+        navigateToIngredientsList(data.id, !!data.is_trial, !!data.is_secret);
       } catch (err) {
         const detail = err.response?.data;
         if (detail?.confirm_password) {
@@ -293,6 +293,62 @@ export default function IngredientForm() {
 
       <form id="ingredient-form" className="card card-pad" onSubmit={save}>
         <div className="form-grid">
+          {(canWrite(user) || form.is_secret) && (
+          <div className="secret-section">
+          {canWrite(user) && (
+            <label className="switch-field">
+              <input
+                className="switch-input"
+                type="checkbox"
+                role="switch"
+                checked={form.is_secret}
+                onChange={(e) => set("is_secret", e.target.checked)}
+              />
+              <span className="switch-track" aria-hidden="true">
+                <span className="switch-knob">
+                  <svg className="switch-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="5" y="11" width="14" height="10" rx="2" />
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                  </svg>
+                </span>
+              </span>
+              <span className="switch-text">Secret Ingredient (password required on save)</span>
+            </label>
+          )}
+          {form.is_secret && canManageSecretAccess(user) && (
+            <div className="field full secret-access">
+              <label>Who can see this secret</label>
+              <div className="hint">
+                Admin and IT always see secrets. Select Staff or Viewer to grant access.
+              </div>
+              {grantableUsers.length === 0 ? (
+                <div className="hint">No Staff or Viewer accounts available.</div>
+              ) : (
+                <div className="secret-viewer-list">
+                  {grantableUsers.map((u) => (
+                    <label key={u.id} className="secret-viewer">
+                      <input
+                        type="checkbox"
+                        checked={(form.secret_viewer_ids || []).includes(u.id)}
+                        onChange={() => toggleSecretViewer(u.id)}
+                      />
+                      <span>{u.display_name || u.email} ({u.role})</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {form.is_secret && canWrite(user) && !canManageSecretAccess(user) && (
+            <div className="hint full">
+              After save, only Admin, IT, and users Admin grants can see this ingredient.
+            </div>
+          )}
+          {!canWrite(user) && form.is_secret && (
+            <div className="hint full">This is a secret ingredient.</div>
+          )}
+          </div>
+          )}
           <div className="field">
             <label className="required">Ingredient Name</label>
             <input className="input" required value={form.name} onChange={(e) => set("name", e.target.value)} />
@@ -403,58 +459,6 @@ export default function IngredientForm() {
             <label>Notes</label>
             <textarea className="textarea" value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} />
           </div>
-          {canWrite(user) && (
-            <label className="switch-field">
-              <input
-                className="switch-input"
-                type="checkbox"
-                role="switch"
-                checked={form.is_secret}
-                onChange={(e) => set("is_secret", e.target.checked)}
-              />
-              <span className="switch-track" aria-hidden="true">
-                <span className="switch-knob">
-                  <svg className="switch-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="5" y="11" width="14" height="10" rx="2" />
-                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                  </svg>
-                </span>
-              </span>
-              <span className="switch-text">Secret Ingredient (password required on save)</span>
-            </label>
-          )}
-          {form.is_secret && canManageSecretAccess(user) && (
-            <div className="field full secret-access">
-              <label>Who can see this secret</label>
-              <div className="hint">
-                Admin and IT always see secrets. Select Staff or Viewer to grant access.
-              </div>
-              {grantableUsers.length === 0 ? (
-                <div className="hint">No Staff or Viewer accounts available.</div>
-              ) : (
-                <div className="secret-viewer-list">
-                  {grantableUsers.map((u) => (
-                    <label key={u.id} className="secret-viewer">
-                      <input
-                        type="checkbox"
-                        checked={(form.secret_viewer_ids || []).includes(u.id)}
-                        onChange={() => toggleSecretViewer(u.id)}
-                      />
-                      <span>{u.display_name || u.email} ({u.role})</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {form.is_secret && canWrite(user) && !canManageSecretAccess(user) && (
-            <div className="hint" style={{ marginTop: 8 }}>
-              After save, only Admin, IT, and users Admin grants can see this ingredient.
-            </div>
-          )}
-          {!canWrite(user) && form.is_secret && (
-            <div className="hint" style={{ marginTop: 8 }}>This is a secret ingredient.</div>
-          )}
         </div>
 
         <h3 style={{ marginTop: 24 }}>Alternative Products</h3>

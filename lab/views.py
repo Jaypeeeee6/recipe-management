@@ -155,9 +155,11 @@ class IngredientViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         tab = self.request.query_params.get("tab")
         if tab == "trial":
-            qs = qs.filter(is_trial=True)
+            qs = qs.filter(is_trial=True, is_secret=False)
+        elif tab == "secret":
+            qs = qs.filter(is_secret=True)
         elif tab == "approved":
-            qs = qs.filter(is_trial=False)
+            qs = qs.filter(is_trial=False, is_secret=False)
         category = self.request.query_params.get("category")
         if category:
             qs = qs.filter(category_id=category)
