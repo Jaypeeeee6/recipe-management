@@ -351,6 +351,7 @@ class MealTrialListSerializer(serializers.ModelSerializer):
             "archive_reasons",
             "ingredient_count",
             "avg_rating",
+            "is_secret",
             "final_dish_photo",
             "created_at",
         ]
@@ -376,6 +377,13 @@ class MealTrialDetailSerializer(MealTrialListSerializer):
         queryset=Ingredient.objects.filter(is_trial=False),
         required=False,
     )
+    secret_viewer_ids = serializers.PrimaryKeyRelatedField(
+        source="secret_viewers",
+        many=True,
+        queryset=User.objects.filter(is_active=True),
+        required=False,
+    )
+    secret_viewers_detail = serializers.SerializerMethodField()
     cost_summary = serializers.SerializerMethodField()
     committee_count = serializers.IntegerField(read_only=True)
     committee_avg = serializers.SerializerMethodField()
@@ -391,6 +399,8 @@ class MealTrialDetailSerializer(MealTrialListSerializer):
             "photo",
             "recipe_lines",
             "prep_steps",
+            "secret_viewer_ids",
+            "secret_viewers_detail",
             "cost_summary",
             "committee_count",
             "committee_avg",
@@ -420,13 +430,35 @@ class MealTrialDetailSerializer(MealTrialListSerializer):
         summary = committee_rating_summary(obj)
         return summary["categories"] if summary else None
 
+    def get_secret_viewers_detail(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not can_manage_secret_access(user):
+            return []
+        return [
+            {
+                "id": u.id,
+                "display_name": getattr(getattr(u, "profile", None), "display_name", None)
+                or u.get_full_name()
+                or u.username,
+                "email": u.email,
+                "role": getattr(getattr(u, "profile", None), "role", None),
+            }
+            for u in obj.secret_viewers.select_related("profile").all()
+        ]
+
     def create(self, validated_data):
         recipe = validated_data.pop("recipe_lines", [])
         steps = validated_data.pop("prep_steps", [])
         ingredients = validated_data.pop("ingredients", [])
+        viewers = validated_data.pop("secret_viewers", None)
         trial = MealTrial.objects.create(**validated_data)
         if ingredients:
             trial.ingredients.set(ingredients)
+        if trial.is_secret and viewers is not None:
+            trial.secret_viewers.set(viewers)
+        elif not trial.is_secret:
+            trial.secret_viewers.clear()
         self._replace_nested(trial, recipe, steps)
         sync_approved_trial_to_product(trial)
         return trial
@@ -435,11 +467,16 @@ class MealTrialDetailSerializer(MealTrialListSerializer):
         recipe = validated_data.pop("recipe_lines", None)
         steps = validated_data.pop("prep_steps", None)
         ingredients = validated_data.pop("ingredients", None)
+        viewers = validated_data.pop("secret_viewers", serializers.empty)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         if ingredients is not None:
             instance.ingredients.set(ingredients)
+        if not instance.is_secret:
+            instance.secret_viewers.clear()
+        elif viewers is not serializers.empty:
+            instance.secret_viewers.set(viewers)
         if recipe is not None or steps is not None:
             self._replace_nested(
                 instance,

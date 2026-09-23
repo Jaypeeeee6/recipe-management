@@ -260,6 +260,13 @@ class MealTrial(models.Model):
         related_name="iterations",
     )
     notes = models.TextField(blank=True)
+    is_secret = models.BooleanField(default=False)
+    secret_viewers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="visible_secret_trials",
+        help_text="Extra users Admin has allowed to see this secret meal trial.",
+    )
     photo = models.ImageField(upload_to="trials/", blank=True)
     final_dish_photo = models.ImageField(upload_to="trials/dishes/", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

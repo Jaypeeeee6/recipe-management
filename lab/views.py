@@ -41,6 +41,7 @@ from .permissions import (
     is_admin,
     user_role,
     visible_ingredients_q,
+    visible_trials_q,
 )
 from .serializers import (
     AuditLogSerializer,
@@ -330,6 +331,7 @@ class MealTrialViewSet(viewsets.ModelViewSet):
             "prep_steps",
             "ingredients",
             "committee_ratings",
+            "secret_viewers",
         ).annotate(
             ingredient_count=Count("ingredients", distinct=True),
             committee_count=Count("committee_ratings", distinct=True),
@@ -340,12 +342,20 @@ class MealTrialViewSet(viewsets.ModelViewSet):
         verdict = self.request.query_params.get("verdict")
         if verdict:
             qs = qs.filter(verdict=verdict)
+        tab = self.request.query_params.get("tab")
         if self.action == "list":
+            if tab == "secret":
+                qs = qs.filter(is_secret=True)
+            else:
+                qs = qs.filter(is_secret=False)
             archived = self.request.query_params.get("archived", "false")
             if archived == "true":
                 qs = qs.filter(trial_archive_q())
             elif archived != "all":
                 qs = qs.exclude(trial_archive_q())
+        visibility = visible_trials_q(self.request.user)
+        if visibility:
+            qs = qs.filter(visibility).distinct()
         return qs
 
     def get_serializer_class(self):
@@ -353,7 +363,26 @@ class MealTrialViewSet(viewsets.ModelViewSet):
             return MealTrialDetailSerializer
         return MealTrialListSerializer
 
+    def _strip_secret_if_needed(self, validated_data):
+        if not can_write(self.request.user):
+            validated_data.pop("is_secret", None)
+            validated_data.pop("secret_viewers", None)
+            return
+        if not can_manage_secret_access(self.request.user):
+            validated_data.pop("secret_viewers", None)
+
+    def _require_password_to_mark_secret(self, making_secret):
+        if not making_secret:
+            return
+        password = self.request.data.get("confirm_password") or ""
+        if not password or not self.request.user.check_password(password):
+            raise ValidationError(
+                {"confirm_password": "Enter your password to mark this as a secret meal trial."}
+            )
+
     def perform_create(self, serializer):
+        self._strip_secret_if_needed(serializer.validated_data)
+        self._require_password_to_mark_secret(bool(serializer.validated_data.get("is_secret")))
         trial = serializer.save(code=next_trial_code())
         log_action(
             request=self.request,
@@ -364,6 +393,11 @@ class MealTrialViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        self._strip_secret_if_needed(serializer.validated_data)
+        becoming_secret = bool(
+            serializer.validated_data.get("is_secret", serializer.instance.is_secret)
+        ) and not serializer.instance.is_secret
+        self._require_password_to_mark_secret(becoming_secret)
         trial = serializer.save()
         log_action(
             request=self.request,
@@ -623,6 +657,11 @@ def dashboard_view(request):
     if visibility:
         ingredients = ingredients.filter(visibility).distinct()
     trials = MealTrial.objects.all()
+    trial_visibility = visible_trials_q(request.user)
+    if trial_visibility:
+        trials = trials.filter(trial_visibility).distinct()
+    # Keep dashboard charts/lists on non-secret trials; secrets live under the Secret tab.
+    trials = trials.filter(is_secret=False)
     success_avg = (
         trials.exclude(verdict=Verdict.PENDING).aggregate(avg=Avg("success_rate"))["avg"] or 0
     )
@@ -907,6 +946,10 @@ def dashboard_view(request):
 def reports_view(request):
     expire_overdue_trials()
     qs = MealTrial.objects.select_related("supplier").prefetch_related("ingredients__category")
+    trial_visibility = visible_trials_q(request.user)
+    if trial_visibility:
+        qs = qs.filter(trial_visibility).distinct()
+    qs = qs.filter(is_secret=False)
     date_from = request.query_params.get("from")
     date_to = request.query_params.get("to")
     category = request.query_params.get("category")

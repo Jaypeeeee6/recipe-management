@@ -6,6 +6,7 @@ import Icon, { IconAction } from "../components/Icon";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
+import SecretBadge from "../components/SecretBadge";
 import { formatDate, formatMoney } from "../utils/format";
 import { exportIngredientsPdf } from "../utils/ingredientExport";
 import { canWrite } from "../utils/roles";
@@ -365,7 +366,7 @@ export default function Ingredients() {
                       <td>
                         {i.photo ? <img className="thumb" src={i.photo} alt="" /> : null}
                         <Link to={`/ingredients/${i.id}`}>{i.name}</Link>
-                        {i.is_secret && <span className="badge badge-gold" style={{ marginLeft: 6 }}>Secret</span>}
+                        {i.is_secret && <SecretBadge className="badge-secret-inline" />}
                         {i.is_low_stock && <span className="badge badge-low" style={{ marginLeft: 6 }}>Low Stock</span>}
                       </td>
                       <td>{i.supplier_name || "—"}</td>
@@ -409,7 +410,10 @@ export default function Ingredients() {
                 >
                   {i.photo && <img className="trial-hero-photo" src={i.photo} alt="" style={{ maxHeight: 140, marginBottom: 8 }} />}
                   <div className="hint">{i.code}</div>
-                  <h3 style={{ marginTop: 4 }}>{i.name}</h3>
+                  <h3 style={{ marginTop: 4 }}>
+                    {i.name}
+                    {i.is_secret && <SecretBadge className="badge-secret-inline" />}
+                  </h3>
                   <p className="hint">{i.supplier_name || "—"}</p>
                   <p className="hint" style={{ marginTop: 4 }}>
                     Added {i.created_at ? formatDate(i.created_at) : "—"}

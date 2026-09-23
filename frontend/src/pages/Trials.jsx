@@ -15,12 +15,13 @@ import Modal from "../components/Modal";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
+import SecretBadge from "../components/SecretBadge";
 import Stars from "../components/Stars";
 import Money from "../components/Money";
 import PhotoGallery from "../components/PhotoGallery";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import { foodCostLabel, foodCostTone, formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, sanitizeOmrDecimalInput, verdictLabel } from "../utils/format";
-import { canWrite } from "../utils/roles";
+import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 
 function previewExpiry(date, amount, unit) {
@@ -53,6 +54,12 @@ function canApproveTrial(trial) {
 
 function canRejectTrial(trial) {
   return trial.verdict !== "not_suitable" && trial.expiry_status !== "expired";
+}
+
+const TRIAL_TABS = ["all", "secret"];
+
+function normalizeTrialTab(value) {
+  return TRIAL_TABS.includes(value) ? value : "all";
 }
 
 function previewLineCost(quantity, recipeUnit, costPerUnit, stockUnit) {
@@ -126,7 +133,8 @@ export function TrialList() {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
-  const [params] = useSearchParams();
+  const [params, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState(normalizeTrialTab(params.get("tab")));
   const [rejecting, setRejecting] = useState(null);
   const [reason, setReason] = useState("taste");
   const [notes, setNotes] = useState("");
@@ -134,18 +142,32 @@ export function TrialList() {
   const [compareIds, setCompareIds] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = () => api.get("/trials/?archived=false").then((r) => setItems(r.data)).finally(() => setLoading(false));
+  const load = (activeTab = tab) => {
+    const query = new URLSearchParams({ archived: "false" });
+    if (activeTab === "secret") query.set("tab", "secret");
+    return api.get(`/trials/?${query}`).then((r) => setItems(r.data)).finally(() => setLoading(false));
+  };
+
   useEffect(() => {
-    load();
     if (params.get("q")) setQ(params.get("q"));
-  }, []);
+  }, [params]);
+
+  useEffect(() => {
+    const urlTab = normalizeTrialTab(params.get("tab"));
+    setTab((prev) => (prev === urlTab ? prev : urlTab));
+  }, [params]);
+
+  useEffect(() => {
+    setLoading(true);
+    load();
+  }, [tab]);
 
   const filtered = items.filter((t) =>
     `${t.title} ${t.code} ${t.conducted_by}`.toLowerCase().includes(q.toLowerCase())
   );
   const {
     page, setPage, pageItems, total, totalPages, from, to,
-  } = usePagination(filtered, 10, q);
+  } = usePagination(filtered, 10, `${tab}|${q}`);
 
   const expiringSoon = useMemo(
     () => items.filter(isExpiringSoon),
@@ -230,6 +252,36 @@ export function TrialList() {
           </ul>
         </div>
       )}
+      <div className="tabs">
+        <button
+          type="button"
+          className={`tab ${tab === "all" ? "active" : ""}`}
+          onClick={() => {
+            setTab("all");
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete("tab");
+              return next;
+            });
+          }}
+        >
+          All Trials
+        </button>
+        <button
+          type="button"
+          className={`tab ${tab === "secret" ? "active" : ""}`}
+          onClick={() => {
+            setTab("secret");
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.set("tab", "secret");
+              return next;
+            });
+          }}
+        >
+          Secret
+        </button>
+      </div>
       <div className="card">
         <div className="toolbar">
           <div className="search-field">
@@ -241,7 +293,11 @@ export function TrialList() {
           <Skeleton count={6} />
         ) : (
           <>
-            {filtered.length === 0 && <div className="empty">No trials found.</div>}
+            {filtered.length === 0 && (
+              <div className="empty">
+                {tab === "secret" ? "No secret trials." : "No trials found."}
+              </div>
+            )}
             <div className="table-wrap">
               <table className="data">
             <thead>
@@ -275,6 +331,7 @@ export function TrialList() {
                       <img className="thumb" src={t.final_dish_photo || t.photo} alt="" />
                     ) : null}
                     <Link to={`/trials/${t.id}`}>{t.title}</Link>
+                    {t.is_secret && <SecretBadge className="badge-secret-inline" />}
                     {t.expiry_status && (
                       <div style={{ marginTop: 4 }}>
                         <StatusBadge value={t.expiry_status} kind="expiry" />
@@ -368,12 +425,15 @@ const emptyTrial = {
   ingredient_ids: [],
   recipe_lines: [],
   prep_steps: [],
+  is_secret: false,
+  secret_viewer_ids: [],
 };
 
 export function TrialForm() {
   const { id } = useParams();
   const isNew = !id || id === "new";
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [form, setForm] = useState(emptyTrial);
   const [ingredients, setIngredients] = useState([]);
   const [ingSearch, setIngSearch] = useState("");
@@ -383,6 +443,11 @@ export function TrialForm() {
   const [dishPhoto, setDishPhoto] = useState("");
   const [saveError, setSaveError] = useState("");
   const [loading, setLoading] = useState(!isNew);
+  const [initialSecret, setInitialSecret] = useState(false);
+  const [secretConfirmOpen, setSecretConfirmOpen] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const [labUsers, setLabUsers] = useState([]);
 
   useEffect(() => {
     document.documentElement.classList.add("edit-trial-page-open");
@@ -391,9 +456,13 @@ export function TrialForm() {
 
   useEffect(() => {
     api.get("/ingredients/?tab=approved").then((r) => setIngredients(r.data));
+    if (canManageSecretAccess(user)) {
+      api.get("/users/").then((r) => setLabUsers(r.data)).catch(() => setLabUsers([]));
+    }
     if (!isNew) {
       api.get(`/trials/${id}/`).then((r) => {
         const d = r.data;
+        setInitialSecret(!!d.is_secret);
         const nextForm = {
           ...emptyTrial,
           ...d,
@@ -404,6 +473,7 @@ export function TrialForm() {
           expiry_amount: d.expiry_amount ?? 24,
           expiry_unit: d.expiry_unit || "hours",
           ingredient_ids: d.ingredient_ids || [],
+          secret_viewer_ids: d.secret_viewer_ids || [],
           recipe_lines: (d.recipe_lines || []).map((line) => ({
             ...line,
             quantity: omrFieldValue(line.quantity),
@@ -418,10 +488,26 @@ export function TrialForm() {
         setProfitMargin(profit ? String(profit.margin) : "");
         setPricingSource("price");
       }).finally(() => setLoading(false));
+    } else {
+      setInitialSecret(false);
     }
-  }, [id, isNew]);
+  }, [id, isNew, user]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const grantableUsers = labUsers.filter((u) => u.role === "staff" || u.role === "viewer");
+
+  const toggleSecretViewer = (uid) => {
+    setForm((f) => {
+      const ids = f.secret_viewer_ids || [];
+      return {
+        ...f,
+        secret_viewer_ids: ids.includes(uid) ? ids.filter((x) => x !== uid) : [...ids, uid],
+      };
+    });
+  };
+
+  const needsSecretPassword = () => form.is_secret && (isNew || !initialSecret);
 
   const costPreview = useMemo(
     () => estimateRecipeCost(form.recipe_lines, form.servings),
@@ -508,6 +594,25 @@ export function TrialForm() {
 
   const save = async (e) => {
     e.preventDefault();
+    if (needsSecretPassword()) {
+      setConfirmPassword("");
+      setConfirmError("");
+      setSecretConfirmOpen(true);
+      return;
+    }
+    await persist();
+  };
+
+  const confirmSecretSave = async () => {
+    if (!confirmPassword.trim()) {
+      setConfirmError("Enter your password to continue.");
+      return;
+    }
+    setConfirmError("");
+    await persist(confirmPassword);
+  };
+
+  const persist = async (password = "") => {
     const payload = {
       title: form.title,
       trial_date: form.trial_date || null,
@@ -526,6 +631,8 @@ export function TrialForm() {
       expiry_amount: form.expiry_amount === "" ? null : Number(form.expiry_amount),
       expiry_unit: form.expiry_unit || "days",
       notes: form.notes,
+      is_secret: form.is_secret,
+      secret_viewer_ids: form.is_secret ? (form.secret_viewer_ids || []) : [],
       ingredient_ids: form.ingredient_ids,
       prep_steps: form.prep_steps.map((s, i) => ({ text: s.text, sort_order: i })),
       recipe_lines: form.recipe_lines.map((l, i) => ({
@@ -537,6 +644,12 @@ export function TrialForm() {
         sort_order: i,
       })),
     };
+    if (!canManageSecretAccess(user)) {
+      delete payload.secret_viewer_ids;
+    }
+    if (needsSecretPassword()) {
+      payload.confirm_password = password;
+    }
     try {
       setSaveError("");
       if (isNew) {
@@ -544,13 +657,31 @@ export function TrialForm() {
         if (pendingPhoto) {
           await uploadPendingPhoto(`/trials/${data.id}/upload_photo/`, pendingPhoto, "final_dish_photo");
         }
-        navigate(`/trials/${data.id}`);
+        setSecretConfirmOpen(false);
+        setConfirmPassword("");
+        if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
+          navigate("/trials");
+        } else {
+          navigate(`/trials/${data.id}`);
+        }
       } else {
-        await api.patch(`/trials/${id}/`, payload);
-        navigate(`/trials/${id}`);
+        const { data } = await api.patch(`/trials/${id}/`, payload);
+        setSecretConfirmOpen(false);
+        setConfirmPassword("");
+        if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
+          setSaveError("Trial saved as secret. Ask Admin to grant you access if you need to see it.");
+          navigate("/trials");
+          return;
+        }
+        navigate(`/trials/${data.id}`);
       }
     } catch (err) {
       const detail = err.response?.data;
+      if (detail?.confirm_password) {
+        setConfirmError(Array.isArray(detail.confirm_password) ? detail.confirm_password[0] : detail.confirm_password);
+        setSecretConfirmOpen(true);
+        return;
+      }
       const message = typeof detail === "string"
         ? detail
         : detail?.detail
@@ -559,6 +690,7 @@ export function TrialForm() {
             .join("; ")
           || "Could not save trial.";
       setSaveError(message);
+      setSecretConfirmOpen(false);
     }
   };
 
@@ -589,6 +721,62 @@ export function TrialForm() {
       <form id="trial-form" className="card card-pad" onSubmit={save}>
         {saveError && <div className="alert alert-warn" style={{ marginBottom: 16 }}>{saveError}</div>}
         <div className="form-grid">
+          {(canWrite(user) || form.is_secret) && (
+            <div className="secret-section">
+              {canWrite(user) && (
+                <label className="switch-field">
+                  <input
+                    className="switch-input"
+                    type="checkbox"
+                    role="switch"
+                    checked={form.is_secret}
+                    onChange={(e) => set("is_secret", e.target.checked)}
+                  />
+                  <span className="switch-track" aria-hidden="true">
+                    <span className="switch-knob">
+                      <svg className="switch-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="5" y="11" width="14" height="10" rx="2" />
+                        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                      </svg>
+                    </span>
+                  </span>
+                  <span className="switch-text">Secret Meal Trial (password required on save)</span>
+                </label>
+              )}
+              {form.is_secret && canManageSecretAccess(user) && (
+                <div className="field full secret-access">
+                  <label>Who can see this secret</label>
+                  <div className="hint">
+                    Admin and IT always see secrets. Select Staff or Viewer to grant access.
+                  </div>
+                  {grantableUsers.length === 0 ? (
+                    <div className="hint">No Staff or Viewer accounts available.</div>
+                  ) : (
+                    <div className="secret-viewer-list">
+                      {grantableUsers.map((u) => (
+                        <label key={u.id} className="secret-viewer">
+                          <input
+                            type="checkbox"
+                            checked={(form.secret_viewer_ids || []).includes(u.id)}
+                            onChange={() => toggleSecretViewer(u.id)}
+                          />
+                          <span>{u.display_name || u.email} ({u.role})</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {form.is_secret && canWrite(user) && !canManageSecretAccess(user) && (
+                <div className="hint full">
+                  After save, only Admin, IT, and users Admin grants can see this meal trial.
+                </div>
+              )}
+              {!canWrite(user) && form.is_secret && (
+                <div className="hint full">This is a secret meal trial.</div>
+              )}
+            </div>
+          )}
           <div className="field full">
             <label className="required">Trial Title / Meal Name</label>
             <input className="input" required value={form.title} onChange={(e) => set("title", e.target.value)} />
@@ -837,6 +1025,59 @@ export function TrialForm() {
         </div>
       </form>
       )}
+
+      {secretConfirmOpen && (
+        <Modal
+          title="Confirm Secret Meal Trial"
+          onClose={() => {
+            setSecretConfirmOpen(false);
+            setConfirmPassword("");
+            setConfirmError("");
+          }}
+          actions={
+            <>
+              <button
+                className="btn btn-back"
+                type="button"
+                onClick={() => {
+                  setSecretConfirmOpen(false);
+                  setConfirmPassword("");
+                  setConfirmError("");
+                }}
+              >
+                <Icon name="back" />
+                Cancel
+              </button>
+              <button className="btn btn-save" type="button" onClick={confirmSecretSave}>
+                <Icon name="save" />
+                Confirm &amp; Save
+              </button>
+            </>
+          }
+        >
+          <p>Enter your account password to mark this as a secret meal trial.</p>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label className="required">Password</label>
+            <input
+              className="input"
+              type="password"
+              autoFocus
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setConfirmError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  confirmSecretSave();
+                }
+              }}
+            />
+            {confirmError && <div className="hint" style={{ color: "var(--danger, #b42318)", marginTop: 6 }}>{confirmError}</div>}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -975,6 +1216,7 @@ export function TrialDetail() {
         <div>
           <h1 className="page-title-with-badge">
             {trial.title}
+            {trial.is_secret && <SecretBadge />}
             {(trial.expiry_status === "expiring_soon" || trial.expiry_status === "expired") && (
               <StatusBadge value={trial.expiry_status} kind="expiry" />
             )}
