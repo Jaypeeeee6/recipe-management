@@ -34,12 +34,12 @@ def is_it(user):
 
 
 def can_see_secrets(user):
-    """Admin and IT can view all secret ingredients and meal trials."""
+    """Admin and IT can view all secret ingredients, meal trials, and products."""
     return user_role(user) in (Role.ADMIN, Role.IT)
 
 
 def can_manage_secret_access(user):
-    """Only Admin can grant who may see a secret ingredient or meal trial."""
+    """Only Admin can grant who may see a secret ingredient, meal trial, or product."""
     return is_admin(user)
 
 
@@ -51,6 +51,13 @@ def visible_ingredients_q(user):
 
 
 def visible_trials_q(user):
+    """Filter: non-secret, or secret visible to Admin/IT, or explicitly granted."""
+    if can_see_secrets(user):
+        return Q()
+    return Q(is_secret=False) | Q(secret_viewers=user)
+
+
+def visible_products_q(user):
     """Filter: non-secret, or secret visible to Admin/IT, or explicitly granted."""
     if can_see_secrets(user):
         return Q()

@@ -41,6 +41,7 @@ from .permissions import (
     is_admin,
     user_role,
     visible_ingredients_q,
+    visible_products_q,
     visible_trials_q,
 )
 from .serializers import (
@@ -486,7 +487,7 @@ class ProductEvaluationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedReadOrWriteRole]
 
     def get_queryset(self):
-        return (
+        qs = (
             ProductEvaluation.objects.prefetch_related(
                 Prefetch(
                     "ingredients",
@@ -498,11 +499,41 @@ class ProductEvaluationViewSet(viewsets.ModelViewSet):
                     "trials",
                     queryset=MealTrial.objects.only("id", "code", "title", "selling_price"),
                 ),
+                "secret_viewers",
             )
             .order_by("-updated_at", "-id")
         )
+        tab = self.request.query_params.get("tab")
+        if self.action == "list":
+            if tab == "secret":
+                qs = qs.filter(is_secret=True)
+            else:
+                qs = qs.filter(is_secret=False)
+        visibility = visible_products_q(self.request.user)
+        if visibility:
+            qs = qs.filter(visibility).distinct()
+        return qs
+
+    def _strip_secret_if_needed(self, validated_data):
+        if not can_write(self.request.user):
+            validated_data.pop("is_secret", None)
+            validated_data.pop("secret_viewers", None)
+            return
+        if not can_manage_secret_access(self.request.user):
+            validated_data.pop("secret_viewers", None)
+
+    def _require_password_to_mark_secret(self, making_secret):
+        if not making_secret:
+            return
+        password = self.request.data.get("confirm_password") or ""
+        if not password or not self.request.user.check_password(password):
+            raise ValidationError(
+                {"confirm_password": "Enter your password to mark this as a secret product."}
+            )
 
     def perform_create(self, serializer):
+        self._strip_secret_if_needed(serializer.validated_data)
+        self._require_password_to_mark_secret(bool(serializer.validated_data.get("is_secret")))
         obj = serializer.save()
         log_action(
             request=self.request,
@@ -513,6 +544,11 @@ class ProductEvaluationViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        self._strip_secret_if_needed(serializer.validated_data)
+        becoming_secret = bool(
+            serializer.validated_data.get("is_secret", serializer.instance.is_secret)
+        ) and not serializer.instance.is_secret
+        self._require_password_to_mark_secret(becoming_secret)
         obj = serializer.save()
         log_action(
             request=self.request,
@@ -901,7 +937,12 @@ def dashboard_view(request):
         duration_by_week.append({"date": week.isoformat(), "duration": round(row["duration"] or 0)})
 
     recent_products = []
-    for product in ProductEvaluation.objects.prefetch_related("ingredients").order_by("-created_at", "-id")[:8]:
+    products_qs = ProductEvaluation.objects.prefetch_related("ingredients").order_by("-created_at", "-id")
+    product_visibility = visible_products_q(request.user)
+    if product_visibility:
+        products_qs = products_qs.filter(product_visibility).distinct()
+    products_qs = products_qs.filter(is_secret=False)
+    for product in products_qs[:8]:
         ingredients_list = list(product.ingredients.all())
         recent_products.append(
             {

@@ -400,6 +400,13 @@ class ProductEvaluation(models.Model):
         max_length=20, choices=Recommendation.choices, default=Recommendation.PENDING
     )
     notes = models.TextField(blank=True)
+    is_secret = models.BooleanField(default=False)
+    secret_viewers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="visible_secret_products",
+        help_text="Extra users Admin has allowed to see this secret product.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

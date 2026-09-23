@@ -1,30 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
+import Modal from "../components/Modal";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
+import SecretBadge from "../components/SecretBadge";
 import Stars from "../components/Stars";
 import { formatDate, formatDateTime, formatExpiryUnit, formatMoney } from "../utils/format";
 import { exportProductPdf } from "../utils/productExport";
+import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
+import { useAuth } from "../auth/AuthContext";
 
 function ProductTabs() {
+  const location = useLocation();
+  const [params] = useSearchParams();
+  const isArchives = location.pathname.includes("/archives");
+  const isSecret = !isArchives && params.get("tab") === "secret";
+  const isProducts = !isArchives && !isSecret;
   return (
     <div className="tabs">
-      <NavLink
-        to="/products"
-        end
-        className={({ isActive }) => `tab ${isActive ? "active" : ""}`}
-      >
+      <Link to="/products" className={`tab ${isProducts ? "active" : ""}`}>
         Products
-      </NavLink>
-      <NavLink
-        to="/products/archives"
-        className={({ isActive }) => `tab ${isActive ? "active" : ""}`}
-      >
+      </Link>
+      <Link to="/products?tab=secret" className={`tab ${isSecret ? "active" : ""}`}>
+        Secret
+      </Link>
+      <Link to="/products/archives" className={`tab ${isArchives ? "active" : ""}`}>
         Archives
-      </NavLink>
+      </Link>
     </div>
   );
 }
@@ -56,11 +61,20 @@ function ExpandableList({ items, renderItem, empty = "—" }) {
 export function ProductList() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [params] = useSearchParams();
+  const tab = params.get("tab") === "secret" ? "secret" : "all";
 
-  const load = () => api.get("/evaluations/").then((r) => setItems(r.data)).finally(() => setLoading(false));
+  const load = (activeTab = tab) => {
+    const query = new URLSearchParams();
+    if (activeTab === "secret") query.set("tab", "secret");
+    const qs = query.toString();
+    return api.get(`/evaluations/${qs ? `?${qs}` : ""}`).then((r) => setItems(r.data)).finally(() => setLoading(false));
+  };
+
   useEffect(() => {
+    setLoading(true);
     load();
-  }, []);
+  }, [tab]);
 
   const remove = async (p) => {
     if (!confirm("Delete this product?")) return;
@@ -78,20 +92,25 @@ export function ProductList() {
 
   const {
     page, setPage, pageItems, total, totalPages, from, to,
-  } = usePagination(items, 10);
+  } = usePagination(items, 10, tab);
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1>Products</h1>
-          <p>Approved meal trials sync here automatically, or add products manually</p>
+          <h1>{tab === "secret" ? "Secret Products" : "Products"}</h1>
+          <p>
+            {tab === "secret"
+              ? "Products marked secret — visible only to Admin, IT, and granted users"
+              : "Approved meal trials sync here automatically, or add products manually"}
+          </p>
         </div>
         <Link className="btn btn-add" to="/products/new"><Icon name="plus" /> Add Product</Link>
       </div>
 
+      <ProductTabs />
+
       <div className="card">
-        <ProductTabs />
         {loading ? (
           <div className="card-pad"><Skeleton count={6} /></div>
         ) : (
@@ -115,14 +134,19 @@ export function ProductList() {
                 <tr>
                   <td colSpan="8">
                     <div className="empty">
-                      No products yet. Approve a meal trial or add a product manually.
+                      {tab === "secret"
+                        ? "No secret products."
+                        : "No products yet. Approve a meal trial or add a product manually."}
                     </div>
                   </td>
                 </tr>
               )}
               {pageItems.map((p) => (
                 <tr key={p.id}>
-                  <td className="col-product"><Link to={`/products/${p.id}`}>{p.product_name}</Link></td>
+                  <td className="col-product">
+                    <Link to={`/products/${p.id}`}>{p.product_name}</Link>
+                    {p.is_secret && <SecretBadge className="badge-secret-inline" />}
+                  </td>
                   <td className="col-price">{p.selling_price != null ? formatMoney(p.selling_price) : "—"}</td>
                   <td>
                     <ExpandableList
@@ -202,8 +226,9 @@ export function ProductArchives() {
         <Link className="btn btn-back" to="/trials">Meal Trials</Link>
       </div>
 
+      <ProductTabs />
+
       <div className="card">
-        <ProductTabs />
         <div className="toolbar">
           <div className="search-field">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 21l-4.3-4.3M10 18a8 8 0 100-16 8 8 0 000 16z" /></svg>
@@ -246,6 +271,7 @@ export function ProductArchives() {
                   <td>{t.code}</td>
                   <td>
                     <Link to={`/trials/${t.id}`}>{t.title}</Link>
+                    {t.is_secret && <SecretBadge className="badge-secret-inline" />}
                     <div className="hint">{t.conducted_by || "—"}</div>
                   </td>
                   <td>{formatDate(t.trial_date)}</td>
@@ -298,6 +324,7 @@ export function ProductForm() {
   const { id } = useParams();
   const isNew = !id || id === "new";
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [form, setForm] = useState({
     product_name: "",
     ingredient_ids: [],
@@ -305,16 +332,28 @@ export function ProductForm() {
     avg_success_rate: 0,
     avg_rating: 0,
     selling_price: null,
+    is_secret: false,
+    secret_viewer_ids: [],
   });
   const [trialTitles, setTrialTitles] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [ingSearch, setIngSearch] = useState("");
   const [loading, setLoading] = useState(!isNew);
+  const [saveError, setSaveError] = useState("");
+  const [initialSecret, setInitialSecret] = useState(false);
+  const [secretConfirmOpen, setSecretConfirmOpen] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const [labUsers, setLabUsers] = useState([]);
 
   useEffect(() => {
     api.get("/ingredients/?tab=approved").then((r) => setIngredients(r.data));
+    if (canManageSecretAccess(user)) {
+      api.get("/users/").then((r) => setLabUsers(r.data)).catch(() => setLabUsers([]));
+    }
     if (!isNew) {
       api.get(`/evaluations/${id}/`).then((r) => {
+        setInitialSecret(!!r.data.is_secret);
         setForm({
           product_name: r.data.product_name || "",
           ingredient_ids: r.data.ingredient_ids || [],
@@ -322,11 +361,29 @@ export function ProductForm() {
           avg_success_rate: r.data.avg_success_rate || 0,
           avg_rating: r.data.avg_rating || 0,
           selling_price: r.data.selling_price ?? null,
+          is_secret: !!r.data.is_secret,
+          secret_viewer_ids: r.data.secret_viewer_ids || [],
         });
         setTrialTitles(r.data.trial_titles || []);
       }).finally(() => setLoading(false));
+    } else {
+      setInitialSecret(false);
     }
-  }, [id, isNew]);
+  }, [id, isNew, user]);
+
+  const grantableUsers = labUsers.filter((u) => u.role === "staff" || u.role === "viewer");
+
+  const toggleSecretViewer = (uid) => {
+    setForm((f) => {
+      const ids = f.secret_viewer_ids || [];
+      return {
+        ...f,
+        secret_viewer_ids: ids.includes(uid) ? ids.filter((x) => x !== uid) : [...ids, uid],
+      };
+    });
+  };
+
+  const needsSecretPassword = () => form.is_secret && (isNew || !initialSecret);
 
   const groupedIngredients = useMemo(() => {
     const visible = ingredients.filter((i) =>
@@ -354,23 +411,88 @@ export function ProductForm() {
 
   const save = async (e) => {
     e.preventDefault();
+    if (needsSecretPassword()) {
+      setConfirmPassword("");
+      setConfirmError("");
+      setSecretConfirmOpen(true);
+      return;
+    }
+    await persist();
+  };
+
+  const confirmSecretSave = async () => {
+    if (!confirmPassword.trim()) {
+      setConfirmError("Enter your password to continue.");
+      return;
+    }
+    setConfirmError("");
+    await persist(confirmPassword);
+  };
+
+  const persist = async (password = "") => {
     const payload = {
       product_name: form.product_name,
       ingredient_ids: form.ingredient_ids,
       notes: form.notes,
+      is_secret: form.is_secret,
+      secret_viewer_ids: form.is_secret ? (form.secret_viewer_ids || []) : [],
     };
-    if (isNew) {
-      await api.post("/evaluations/", payload);
-    } else {
-      await api.patch(`/evaluations/${id}/`, payload);
+    if (!canManageSecretAccess(user)) {
+      delete payload.secret_viewer_ids;
     }
-    navigate("/products");
+    if (needsSecretPassword()) {
+      payload.confirm_password = password;
+    }
+    try {
+      setSaveError("");
+      if (isNew) {
+        const { data } = await api.post("/evaluations/", payload);
+        setSecretConfirmOpen(false);
+        setConfirmPassword("");
+        if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
+          navigate("/products");
+        } else {
+          navigate(data.is_secret ? "/products?tab=secret" : "/products");
+        }
+      } else {
+        const { data } = await api.patch(`/evaluations/${id}/`, payload);
+        setSecretConfirmOpen(false);
+        setConfirmPassword("");
+        if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
+          setSaveError("Product saved as secret. Ask Admin to grant you access if you need to see it.");
+          navigate("/products");
+          return;
+        }
+        navigate(data.is_secret ? "/products?tab=secret" : "/products");
+      }
+    } catch (err) {
+      const detail = err.response?.data;
+      if (detail?.confirm_password) {
+        setConfirmError(Array.isArray(detail.confirm_password) ? detail.confirm_password[0] : detail.confirm_password);
+        setSecretConfirmOpen(true);
+        return;
+      }
+      const message = typeof detail === "string"
+        ? detail
+        : detail?.detail
+          || Object.entries(detail || {})
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+            .join("; ")
+          || "Could not save product.";
+      setSaveError(message);
+      setSecretConfirmOpen(false);
+    }
   };
 
   return (
     <div>
       <div className="page-header">
-        <h1>{isNew ? "Add Product" : "Edit Product"}</h1>
+        <div>
+          <h1 className="page-title-with-badge">
+            {isNew ? "Add Product" : "Edit Product"}
+            {!isNew && form.is_secret && <SecretBadge />}
+          </h1>
+        </div>
         <div className="page-header-actions">
           {!isNew && (
             <button
@@ -404,6 +526,63 @@ export function ProductForm() {
         <div className="card card-pad"><Skeleton count={6} height={36} /></div>
       ) : (
       <form id="product-form" className="card card-pad" onSubmit={save}>
+        {saveError && <div className="alert alert-warn" style={{ marginBottom: 16 }}>{saveError}</div>}
+        {(canWrite(user) || form.is_secret) && (
+          <div className="secret-section">
+            {canWrite(user) && (
+              <label className="switch-field">
+                <input
+                  className="switch-input"
+                  type="checkbox"
+                  role="switch"
+                  checked={form.is_secret}
+                  onChange={(e) => setForm({ ...form, is_secret: e.target.checked })}
+                />
+                <span className="switch-track" aria-hidden="true">
+                  <span className="switch-knob">
+                    <svg className="switch-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="5" y="11" width="14" height="10" rx="2" />
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                    </svg>
+                  </span>
+                </span>
+                <span className="switch-text">Secret Product (password required on save)</span>
+              </label>
+            )}
+            {form.is_secret && canManageSecretAccess(user) && (
+              <div className="field full secret-access">
+                <label>Who can see this secret</label>
+                <div className="hint">
+                  Admin and IT always see secrets. Select Staff or Viewer to grant access.
+                </div>
+                {grantableUsers.length === 0 ? (
+                  <div className="hint">No Staff or Viewer accounts available.</div>
+                ) : (
+                  <div className="secret-viewer-list">
+                    {grantableUsers.map((u) => (
+                      <label key={u.id} className="secret-viewer">
+                        <input
+                          type="checkbox"
+                          checked={(form.secret_viewer_ids || []).includes(u.id)}
+                          onChange={() => toggleSecretViewer(u.id)}
+                        />
+                        <span>{u.display_name || u.email} ({u.role})</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {form.is_secret && canWrite(user) && !canManageSecretAccess(user) && (
+              <div className="hint full">
+                After save, only Admin, IT, and users Admin grants can see this product.
+              </div>
+            )}
+            {!canWrite(user) && form.is_secret && (
+              <div className="hint full">This is a secret product.</div>
+            )}
+          </div>
+        )}
         <div className="field">
           <label className="required">Product Name</label>
           <input className="input" required value={form.product_name} onChange={(e) => setForm({ ...form, product_name: e.target.value })} />
@@ -431,9 +610,7 @@ export function ProductForm() {
             onChange={(e) => setIngSearch(e.target.value)}
             style={{ maxWidth: 360, marginBottom: 12 }}
           />
-          {loading ? (
-            <Skeleton count={4} />
-          ) : groupedIngredients.length === 0 && (
+          {groupedIngredients.length === 0 && (
             <div className="empty">No approved ingredients found.</div>
           )}
           {groupedIngredients.map((section) => (
@@ -481,6 +658,59 @@ export function ProductForm() {
           </div>
         )}
       </form>
+      )}
+
+      {secretConfirmOpen && (
+        <Modal
+          title="Confirm Secret Product"
+          onClose={() => {
+            setSecretConfirmOpen(false);
+            setConfirmPassword("");
+            setConfirmError("");
+          }}
+          actions={
+            <>
+              <button
+                className="btn btn-back"
+                type="button"
+                onClick={() => {
+                  setSecretConfirmOpen(false);
+                  setConfirmPassword("");
+                  setConfirmError("");
+                }}
+              >
+                <Icon name="back" />
+                Cancel
+              </button>
+              <button className="btn btn-save" type="button" onClick={confirmSecretSave}>
+                <Icon name="save" />
+                Confirm &amp; Save
+              </button>
+            </>
+          }
+        >
+          <p>Enter your account password to mark this as a secret product.</p>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label className="required">Password</label>
+            <input
+              className="input"
+              type="password"
+              autoFocus
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setConfirmError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  confirmSecretSave();
+                }
+              }}
+            />
+            {confirmError && <div className="hint" style={{ color: "var(--danger, #b42318)", marginTop: 6 }}>{confirmError}</div>}
+          </div>
+        </Modal>
       )}
     </div>
   );

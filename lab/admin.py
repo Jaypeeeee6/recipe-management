@@ -37,7 +37,8 @@ class MealTrialAdmin(admin.ModelAdmin):
 
 @admin.register(m.ProductEvaluation)
 class ProductEvaluationAdmin(admin.ModelAdmin):
-    list_display = ("product_name", "recommendation", "avg_success_rate", "avg_rating")
+    list_display = ("product_name", "recommendation", "avg_success_rate", "avg_rating", "is_secret")
+    list_filter = ("recommendation", "is_secret")
 
 
 @admin.register(m.AuditLog)

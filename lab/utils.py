@@ -277,6 +277,7 @@ def sync_approved_trial_to_product(trial):
         defaults={
             "recommendation": Recommendation.APPROVED,
             "notes": trial.notes or "",
+            "is_secret": trial.is_secret,
         },
     )
     product.trials.add(trial)
@@ -286,6 +287,11 @@ def sync_approved_trial_to_product(trial):
     if trial.notes and not product.notes:
         product.notes = trial.notes
         product.save(update_fields=["notes"])
+    if trial.is_secret and not product.is_secret:
+        product.is_secret = True
+        product.save(update_fields=["is_secret"])
+    if trial.is_secret:
+        product.secret_viewers.add(*trial.secret_viewers.all())
     product.recommendation = Recommendation.APPROVED
     product.save(update_fields=["recommendation"])
     refresh_product_averages(product)
