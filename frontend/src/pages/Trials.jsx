@@ -23,18 +23,28 @@ import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import { foodCostLabel, foodCostTone, formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, sanitizeOmrDecimalInput, verdictLabel } from "../utils/format";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
+import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
 
-function previewExpiry(date, amount, unit) {
-  if (!date || !amount) return "";
+const EXPIRED_TRIAL_SAVE_MESSAGE =
+  "This trial is already expired based on the trial expiry. You are not allowed to save it.";
+
+function computePreviewExpiresAt(date, amount, unit) {
+  if (!date || !amount) return null;
   const n = Number(amount);
-  if (Number.isNaN(n) || n <= 0) return "";
+  if (Number.isNaN(n) || n <= 0) return null;
   const [year, month, day] = date.split("-").map(Number);
   const start = unit === "hours"
     ? new Date(year, month - 1, day, new Date().getHours(), new Date().getMinutes(), 0)
     : new Date(year, month - 1, day, 0, 0, 0);
   if (unit === "hours") start.setHours(start.getHours() + n);
   else start.setDate(start.getDate() + n);
-  return start.toLocaleString("en-GB", {
+  return start;
+}
+
+function previewExpiry(date, amount, unit) {
+  const expiresAt = computePreviewExpiresAt(date, amount, unit);
+  if (!expiresAt) return "";
+  return expiresAt.toLocaleString("en-GB", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -42,6 +52,11 @@ function previewExpiry(date, amount, unit) {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function isPreviewAlreadyExpired(date, amount, unit) {
+  const expiresAt = computePreviewExpiresAt(date, amount, unit);
+  return !!expiresAt && expiresAt.getTime() <= Date.now();
 }
 
 function isExpiringSoon(trial) {
@@ -131,6 +146,7 @@ function sanitizePercentInput(raw) {
 
 export function TrialList() {
   const { user } = useAuth();
+  const { showSuccess, showError, confirmDelete } = useDialogs();
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [params, setSearchParams] = useSearchParams();
@@ -138,9 +154,11 @@ export function TrialList() {
   const [rejecting, setRejecting] = useState(null);
   const [reason, setReason] = useState("taste");
   const [notes, setNotes] = useState("");
-  const [toast, setToast] = useState("");
   const [compareIds, setCompareIds] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [flashId, setFlashId] = useState("");
+  const [flashPhase, setFlashPhase] = useState("off"); // on | fading | off
+  const highlightParam = params.get("highlight");
 
   const load = (activeTab = tab) => {
     const query = new URLSearchParams({ archived: "false" });
@@ -157,6 +175,32 @@ export function TrialList() {
     setTab((prev) => (prev === urlTab ? prev : urlTab));
   }, [params]);
 
+  // Capture highlight once from the URL, then strip it so re-renders don't re-trigger.
+  useEffect(() => {
+    if (!highlightParam) return;
+    setFlashId(String(highlightParam));
+    setFlashPhase("on");
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (!next.has("highlight")) return prev;
+      next.delete("highlight");
+      return next;
+    }, { replace: true });
+  }, [highlightParam, setSearchParams]);
+
+  useEffect(() => {
+    if (!flashId) return undefined;
+    const fadeTimer = setTimeout(() => setFlashPhase("fading"), 1400);
+    const clearTimer = setTimeout(() => {
+      setFlashId("");
+      setFlashPhase("off");
+    }, 2800);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [flashId]);
+
   useEffect(() => {
     setLoading(true);
     load();
@@ -168,6 +212,29 @@ export function TrialList() {
   const {
     page, setPage, pageItems, total, totalPages, from, to,
   } = usePagination(filtered, 10, `${tab}|${q}`);
+
+  // Jump to the page that contains the highlighted trial.
+  useEffect(() => {
+    if (!flashId || loading) return;
+    const idx = filtered.findIndex((t) => String(t.id) === String(flashId));
+    if (idx < 0) return;
+    const targetPage = Math.floor(idx / 10) + 1;
+    if (targetPage !== page) setPage(targetPage);
+  }, [flashId, loading, filtered, page, setPage]);
+
+  useEffect(() => {
+    if (!flashId || loading || flashPhase !== "on") return undefined;
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-trial-id="${CSS.escape(String(flashId))}"]`);
+      el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [flashId, loading, flashPhase, pageItems]);
+
+  const flashClass = (id) => {
+    if (!flashId || String(id) !== String(flashId) || flashPhase === "off") return undefined;
+    return flashPhase === "fading" ? "row-highlight-fade" : "row-highlight";
+  };
 
   const expiringSoon = useMemo(
     () => items.filter(isExpiringSoon),
@@ -183,36 +250,39 @@ export function TrialList() {
   };
 
   const remove = async (t) => {
-    if (!confirm("Delete this trial?")) return;
+    const ok = await confirmDelete("Delete this trial?");
+    if (!ok) return;
     await api.delete(`/trials/${t.id}/`);
     load();
   };
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 2500);
-  };
-
   const approve = async (trial) => {
-    await api.post(`/trials/${trial.id}/approve/`);
-    showToast("Trial approved.");
-    load();
+    try {
+      await api.post(`/trials/${trial.id}/approve/`);
+      showSuccess("Trial approved.");
+      load();
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not approve trial."));
+    }
   };
 
   const reject = async () => {
-    await api.post(`/trials/${rejecting.id}/reject/`, {
-      rejection_reason: reason,
-      rejection_notes: notes,
-    });
-    setRejecting(null);
-    setNotes("");
-    showToast("Trial rejected.");
-    load();
+    try {
+      await api.post(`/trials/${rejecting.id}/reject/`, {
+        rejection_reason: reason,
+        rejection_notes: notes,
+      });
+      setRejecting(null);
+      setNotes("");
+      showSuccess("Trial rejected.");
+      load();
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not reject trial."));
+    }
   };
 
   return (
     <div>
-      {toast && <div className="toast">{toast}</div>}
       <div className="page-header">
         <div>
           <h1>Meal Trials</h1>
@@ -314,8 +384,13 @@ export function TrialList() {
               </tr>
             </thead>
             <tbody>
-              {pageItems.map((t) => (
-                <tr key={t.id} className={isExpiringSoon(t) ? "row-warn" : undefined}>
+              {pageItems.map((t) => {
+                const highlight = flashClass(t.id);
+                const rowClass = [isExpiringSoon(t) ? "row-warn" : "", highlight || ""]
+                  .filter(Boolean)
+                  .join(" ") || undefined;
+                return (
+                <tr key={t.id} data-trial-id={t.id} className={rowClass}>
                   <td>
                     <input
                       type="checkbox"
@@ -360,10 +435,14 @@ export function TrialList() {
                     {canRejectTrial(t) && (
                       <IconAction name="reject" title="Reject" tone="danger" onClick={() => setRejecting(t)} />
                     )}
+                    {canWrite(user) && (
+                      <IconAction name="copy" title="Duplicate" to={`/trials/new?from=${t.id}`} />
+                    )}
                     <IconAction name="trash" title="Delete" tone="danger" onClick={() => remove(t)} />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -429,11 +508,59 @@ const emptyTrial = {
   secret_viewer_ids: [],
 };
 
+function trialApiToForm(d) {
+  return {
+    ...emptyTrial,
+    ...d,
+    supplier: d.supplier || "",
+    selling_price: d.selling_price != null && d.selling_price !== "" ? omrFieldValue(d.selling_price) : "",
+    cooking_temperature: d.cooking_temperature || "",
+    cooking_duration: d.cooking_duration || "",
+    expiry_amount: d.expiry_amount ?? 24,
+    expiry_unit: d.expiry_unit || "hours",
+    ingredient_ids: d.ingredient_ids || [],
+    secret_viewer_ids: d.secret_viewer_ids || [],
+    recipe_lines: (d.recipe_lines || []).map((line) => ({
+      ...line,
+      quantity: omrFieldValue(line.quantity),
+      cost_per_unit: omrFieldValue(line.cost_per_unit),
+    })),
+    prep_steps: (d.prep_steps || []).map((s) => ({ text: s.text })),
+  };
+}
+
+/** Prefill a new trial from an existing one — new identity, fresh date/ratings. */
+function trialApiToDuplicateForm(d) {
+  const base = trialApiToForm(d);
+  return {
+    ...base,
+    code: "",
+    trial_date: localToday(),
+    taste: 0,
+    texture: 0,
+    cost: 0,
+    consistency: 0,
+    overall: 0,
+    success_rate: 0,
+    repetition_number: (Number(d.repetition_number) || 1) + 1,
+  };
+}
+
+function applyFormPricing(nextForm, setProfitMargin, setPricingSource) {
+  const { costPerServing } = estimateRecipeCost(nextForm.recipe_lines, nextForm.servings);
+  const profit = profitFromSellingPrice(costPerServing, nextForm.selling_price);
+  setProfitMargin(profit ? String(profit.margin) : "");
+  setPricingSource("price");
+}
+
 export function TrialForm() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const isNew = !id || id === "new";
+  const duplicateFromId = isNew ? searchParams.get("from") : null;
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showError, showSuccess } = useDialogs();
   const [form, setForm] = useState(emptyTrial);
   const [ingredients, setIngredients] = useState([]);
   const [ingSearch, setIngSearch] = useState("");
@@ -441,8 +568,8 @@ export function TrialForm() {
   const [pricingSource, setPricingSource] = useState("price"); // "price" | "margin"
   const [pendingPhoto, setPendingPhoto] = useState(null);
   const [dishPhoto, setDishPhoto] = useState("");
-  const [saveError, setSaveError] = useState("");
-  const [loading, setLoading] = useState(!isNew);
+  const [loading, setLoading] = useState(!isNew || !!duplicateFromId);
+  const [parentTrialId, setParentTrialId] = useState(null);
   const [initialSecret, setInitialSecret] = useState(false);
   const [secretConfirmOpen, setSecretConfirmOpen] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -460,38 +587,36 @@ export function TrialForm() {
       api.get("/users/").then((r) => setLabUsers(r.data)).catch(() => setLabUsers([]));
     }
     if (!isNew) {
+      setParentTrialId(null);
       api.get(`/trials/${id}/`).then((r) => {
         const d = r.data;
         setInitialSecret(!!d.is_secret);
-        const nextForm = {
-          ...emptyTrial,
-          ...d,
-          supplier: d.supplier || "",
-          selling_price: d.selling_price != null && d.selling_price !== "" ? omrFieldValue(d.selling_price) : "",
-          cooking_temperature: d.cooking_temperature || "",
-          cooking_duration: d.cooking_duration || "",
-          expiry_amount: d.expiry_amount ?? 24,
-          expiry_unit: d.expiry_unit || "hours",
-          ingredient_ids: d.ingredient_ids || [],
-          secret_viewer_ids: d.secret_viewer_ids || [],
-          recipe_lines: (d.recipe_lines || []).map((line) => ({
-            ...line,
-            quantity: omrFieldValue(line.quantity),
-            cost_per_unit: omrFieldValue(line.cost_per_unit),
-          })),
-          prep_steps: (d.prep_steps || []).map((s) => ({ text: s.text })),
-        };
+        const nextForm = trialApiToForm(d);
         setForm(nextForm);
         setDishPhoto(d.final_dish_photo || d.photo || "");
-        const { costPerServing } = estimateRecipeCost(nextForm.recipe_lines, nextForm.servings);
-        const profit = profitFromSellingPrice(costPerServing, nextForm.selling_price);
-        setProfitMargin(profit ? String(profit.margin) : "");
-        setPricingSource("price");
+        applyFormPricing(nextForm, setProfitMargin, setPricingSource);
+      }).finally(() => setLoading(false));
+    } else if (duplicateFromId) {
+      setLoading(true);
+      setDishPhoto("");
+      setPendingPhoto(null);
+      api.get(`/trials/${duplicateFromId}/`).then((r) => {
+        const d = r.data;
+        setInitialSecret(false);
+        setParentTrialId(d.id);
+        const nextForm = trialApiToDuplicateForm(d);
+        setForm(nextForm);
+        applyFormPricing(nextForm, setProfitMargin, setPricingSource);
+      }).catch(() => {
+        setParentTrialId(null);
+        setForm(emptyTrial);
+        showError("Could not load the trial to duplicate.");
       }).finally(() => setLoading(false));
     } else {
       setInitialSecret(false);
+      setParentTrialId(null);
     }
-  }, [id, isNew, user]);
+  }, [id, isNew, duplicateFromId, user, showError]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -613,6 +738,13 @@ export function TrialForm() {
   };
 
   const persist = async (password = "") => {
+    const expiryAmount = form.expiry_amount === "" ? null : Number(form.expiry_amount);
+    const expiryUnit = form.expiry_unit || "days";
+    if (isNew && isPreviewAlreadyExpired(form.trial_date, expiryAmount, expiryUnit)) {
+      setSecretConfirmOpen(false);
+      showError(EXPIRED_TRIAL_SAVE_MESSAGE, "Trial Already Expired");
+      return;
+    }
     const payload = {
       title: form.title,
       trial_date: form.trial_date || null,
@@ -628,8 +760,8 @@ export function TrialForm() {
       cooking_temperature: form.cooking_temperature === "" ? null : Number(form.cooking_temperature),
       cooking_duration: form.cooking_duration === "" ? null : Number(form.cooking_duration),
       repetition_number: form.repetition_number,
-      expiry_amount: form.expiry_amount === "" ? null : Number(form.expiry_amount),
-      expiry_unit: form.expiry_unit || "days",
+      expiry_amount: expiryAmount,
+      expiry_unit: expiryUnit,
       notes: form.notes,
       is_secret: form.is_secret,
       secret_viewer_ids: form.is_secret ? (form.secret_viewer_ids || []) : [],
@@ -644,6 +776,9 @@ export function TrialForm() {
         sort_order: i,
       })),
     };
+    if (isNew && parentTrialId) {
+      payload.parent_trial = parentTrialId;
+    }
     if (!canManageSecretAccess(user)) {
       delete payload.secret_viewer_ids;
     }
@@ -651,7 +786,6 @@ export function TrialForm() {
       payload.confirm_password = password;
     }
     try {
-      setSaveError("");
       if (isNew) {
         const { data } = await api.post("/trials/", payload);
         if (pendingPhoto) {
@@ -662,14 +796,16 @@ export function TrialForm() {
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
           navigate("/trials");
         } else {
-          navigate(`/trials/${data.id}`);
+          const qs = new URLSearchParams({ highlight: String(data.id) });
+          if (payload.is_secret) qs.set("tab", "secret");
+          navigate(`/trials?${qs}`);
         }
       } else {
         const { data } = await api.patch(`/trials/${id}/`, payload);
         setSecretConfirmOpen(false);
         setConfirmPassword("");
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
-          setSaveError("Trial saved as secret. Ask Admin to grant you access if you need to see it.");
+          showSuccess("Trial saved as secret. Ask Admin to grant you access if you need to see it.");
           navigate("/trials");
           return;
         }
@@ -682,15 +818,13 @@ export function TrialForm() {
         setSecretConfirmOpen(true);
         return;
       }
-      const message = typeof detail === "string"
-        ? detail
-        : detail?.detail
-          || Object.entries(detail || {})
-            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-            .join("; ")
-          || "Could not save trial.";
-      setSaveError(message);
+      const message = apiErrorMessage(err, "Could not save trial.");
       setSecretConfirmOpen(false);
+      if (isNew && String(message).includes("already expired")) {
+        showError(EXPIRED_TRIAL_SAVE_MESSAGE, "Trial Already Expired");
+        return;
+      }
+      showError(message);
     }
   };
 
@@ -701,7 +835,11 @@ export function TrialForm() {
   return (
     <div className="edit-trial-page">
       <div className="page-header sticky-form-header">
-        <h1>{isNew ? "New Trial" : `Edit Trial: ${form.title || "…"}`}</h1>
+        <h1>
+          {isNew
+            ? (duplicateFromId ? "Duplicate Trial" : "New Trial")
+            : `Edit Trial: ${form.title || "…"}`}
+        </h1>
         <div className="page-header-actions">
           <Link className="btn btn-back" to={isNew ? "/trials" : `/trials/${id}`}>
             <Icon name="back" />
@@ -719,7 +857,6 @@ export function TrialForm() {
         <div className="card card-pad"><Skeleton count={8} height={36} /></div>
       ) : (
       <form id="trial-form" className="card card-pad" onSubmit={save}>
-        {saveError && <div className="alert alert-warn" style={{ marginBottom: 16 }}>{saveError}</div>}
         <div className="form-grid">
           {(canWrite(user) || form.is_secret) && (
             <div className="secret-section">
@@ -850,10 +987,6 @@ export function TrialForm() {
           <div className="field">
             <label>Repetition #</label>
             <input className="input" type="number" min="1" value={form.repetition_number} onChange={(e) => set("repetition_number", Number(e.target.value))} />
-          </div>
-          <div className="field">
-            <label>Success Rate (%)</label>
-            <input className="input" type="number" min="0" max="100" value={form.success_rate} onChange={(e) => set("success_rate", Number(e.target.value))} />
           </div>
         </div>
 
@@ -1084,13 +1217,14 @@ export function TrialForm() {
 
 export function TrialDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const { showSuccess, showError } = useDialogs();
   const [trial, setTrial] = useState(null);
   const [scale, setScale] = useState(1);
   const [committee, setCommittee] = useState([]);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("taste");
   const [notes, setNotes] = useState("");
-  const [toast, setToast] = useState("");
   const [loadError, setLoadError] = useState("");
 
   const load = () => {
@@ -1108,26 +1242,29 @@ export function TrialDetail() {
   };
   useEffect(load, [id]);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 2500);
-  };
-
   const approve = async () => {
-    const { data } = await api.post(`/trials/${id}/approve/`);
-    setTrial(data);
-    showToast("Trial approved.");
+    try {
+      const { data } = await api.post(`/trials/${id}/approve/`);
+      setTrial(data);
+      showSuccess("Trial approved.");
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not approve trial."));
+    }
   };
 
   const reject = async () => {
-    const { data } = await api.post(`/trials/${id}/reject/`, {
-      rejection_reason: reason,
-      rejection_notes: notes,
-    });
-    setTrial(data);
-    setRejecting(false);
-    setNotes("");
-    showToast("Trial rejected.");
+    try {
+      const { data } = await api.post(`/trials/${id}/reject/`, {
+        rejection_reason: reason,
+        rejection_notes: notes,
+      });
+      setTrial(data);
+      setRejecting(false);
+      setNotes("");
+      showSuccess("Trial rejected.");
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not reject trial."));
+    }
   };
 
   const factor = useMemo(() => {
@@ -1208,12 +1345,12 @@ export function TrialDetail() {
 
   return (
     <div>
-      {toast && <div className="toast">{toast}</div>}
-      <div className="page-breadcrumb hint">
-        <Link to="/trials">Meal Trials</Link>
-      </div>
       <div className="page-header">
         <div>
+          <Link to="/trials" className="detail-back" aria-label="Back">
+            <Icon name="chevronLeft" />
+            <span className="mobile-back-label">Back</span>
+          </Link>
           <h1 className="page-title-with-badge">
             {trial.title}
             {trial.is_secret && <SecretBadge />}
@@ -1234,6 +1371,11 @@ export function TrialDetail() {
             <button className="btn btn-danger" onClick={() => setRejecting(true)}><Icon name="reject" /> Reject</button>
           )}
           <button className="btn btn-ghost" onClick={printRecipe}><Icon name="printer" /> Print Recipe</button>
+          {canWrite(user) && (
+            <Link className="btn btn-ghost" to={`/trials/new?from=${id}`}>
+              <Icon name="copy" /> Duplicate
+            </Link>
+          )}
           <Link className="btn btn-gold" to={`/trials/${id}/edit`}><Icon name="edit" /> Edit Trial</Link>
         </div>
       </div>

@@ -12,6 +12,7 @@ import { formatDate, formatDateTime, formatExpiryUnit, formatMoney } from "../ut
 import { exportProductPdf } from "../utils/productExport";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
+import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
 
 function ProductTabs() {
   const location = useLocation();
@@ -59,6 +60,7 @@ function ExpandableList({ items, renderItem, empty = "—" }) {
 }
 
 export function ProductList() {
+  const { showError, confirmDelete } = useDialogs();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [params] = useSearchParams();
@@ -77,16 +79,21 @@ export function ProductList() {
   }, [tab]);
 
   const remove = async (p) => {
-    if (!confirm("Delete this product?")) return;
-    await api.delete(`/evaluations/${p.id}/`);
-    load();
+    const ok = await confirmDelete("Delete this product?");
+    if (!ok) return;
+    try {
+      await api.delete(`/evaluations/${p.id}/`);
+      load();
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not delete product."));
+    }
   };
 
   const exportPdf = async (p) => {
     try {
       await exportProductPdf(p);
     } catch {
-      alert("Could not export this product.");
+      showError("Could not export this product.");
     }
   };
 
@@ -325,6 +332,7 @@ export function ProductForm() {
   const isNew = !id || id === "new";
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showError, showSuccess } = useDialogs();
   const [form, setForm] = useState({
     product_name: "",
     ingredient_ids: [],
@@ -339,7 +347,6 @@ export function ProductForm() {
   const [ingredients, setIngredients] = useState([]);
   const [ingSearch, setIngSearch] = useState("");
   const [loading, setLoading] = useState(!isNew);
-  const [saveError, setSaveError] = useState("");
   const [initialSecret, setInitialSecret] = useState(false);
   const [secretConfirmOpen, setSecretConfirmOpen] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -444,7 +451,6 @@ export function ProductForm() {
       payload.confirm_password = password;
     }
     try {
-      setSaveError("");
       if (isNew) {
         const { data } = await api.post("/evaluations/", payload);
         setSecretConfirmOpen(false);
@@ -459,7 +465,7 @@ export function ProductForm() {
         setSecretConfirmOpen(false);
         setConfirmPassword("");
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
-          setSaveError("Product saved as secret. Ask Admin to grant you access if you need to see it.");
+          showSuccess("Product saved as secret. Ask Admin to grant you access if you need to see it.");
           navigate("/products");
           return;
         }
@@ -472,15 +478,8 @@ export function ProductForm() {
         setSecretConfirmOpen(true);
         return;
       }
-      const message = typeof detail === "string"
-        ? detail
-        : detail?.detail
-          || Object.entries(detail || {})
-            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-            .join("; ")
-          || "Could not save product.";
-      setSaveError(message);
       setSecretConfirmOpen(false);
+      showError(apiErrorMessage(err, "Could not save product."));
     }
   };
 
@@ -526,7 +525,6 @@ export function ProductForm() {
         <div className="card card-pad"><Skeleton count={6} height={36} /></div>
       ) : (
       <form id="product-form" className="card card-pad" onSubmit={save}>
-        {saveError && <div className="alert alert-warn" style={{ marginBottom: 16 }}>{saveError}</div>}
         {(canWrite(user) || form.is_secret) && (
           <div className="secret-section">
             {canWrite(user) && (

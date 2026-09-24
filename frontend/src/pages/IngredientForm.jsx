@@ -9,6 +9,7 @@ import StatusBadge from "../components/StatusBadge";
 import { formatMoney, omrFieldValue, sanitizeOmrDecimalInput } from "../utils/format";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
+import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
 
 const empty = {
   name: "",
@@ -38,12 +39,12 @@ export default function IngredientForm() {
   const isNew = !id || id === "new";
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showError, showSuccess } = useDialogs();
   const [form, setForm] = useState(empty);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [allIngredients, setAllIngredients] = useState([]);
   const [altSearch, setAltSearch] = useState("");
-  const [toast, setToast] = useState("");
   const [history, setHistory] = useState([]);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("taste");
@@ -166,13 +167,9 @@ export default function IngredientForm() {
           setSecretConfirmOpen(true);
           return;
         }
-        const message = typeof detail === "string"
-          ? detail
-          : detail
-            ? Object.entries(detail).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("; ")
-            : "Could not save ingredient.";
-        setToast(message);
+        const message = apiErrorMessage(err, "Could not save ingredient.");
         setSecretConfirmOpen(false);
+        showError(message);
       }
     } else {
       try {
@@ -180,7 +177,7 @@ export default function IngredientForm() {
         setSecretConfirmOpen(false);
         setConfirmPassword("");
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
-          setToast("Ingredient saved as secret. Ask Admin to grant you access if you need to see it.");
+          showSuccess("Ingredient saved as secret. Ask Admin to grant you access if you need to see it.");
           navigate("/ingredients");
           return;
         }
@@ -192,13 +189,9 @@ export default function IngredientForm() {
           setSecretConfirmOpen(true);
           return;
         }
-        const message = typeof detail === "string"
-          ? detail
-          : detail
-            ? Object.entries(detail).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("; ")
-            : "Could not save ingredient.";
-        setToast(message);
+        const message = apiErrorMessage(err, "Could not save ingredient.");
         setSecretConfirmOpen(false);
+        showError(message);
       }
     }
   };
@@ -234,27 +227,34 @@ export default function IngredientForm() {
   const canReject = !isNew && (!form.is_trial || form.trial_status === "testing");
 
   const approve = async () => {
-    await api.post(`/ingredients/${id}/approve/`);
-    setToast("Ingredient approved.");
-    const { data } = await api.get(`/ingredients/${id}/`);
-    setForm({ ...empty, ...data, category: data.category || "", supplier: data.supplier || "", shelf_life_days: data.shelf_life_days || "", alternative_ids: data.alternative_ids || [] });
+    try {
+      await api.post(`/ingredients/${id}/approve/`);
+      showSuccess("Ingredient approved.");
+      const { data } = await api.get(`/ingredients/${id}/`);
+      setForm({ ...empty, ...data, category: data.category || "", supplier: data.supplier || "", shelf_life_days: data.shelf_life_days || "", alternative_ids: data.alternative_ids || [] });
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not approve ingredient."));
+    }
   };
 
   const reject = async () => {
-    await api.post(`/ingredients/${id}/reject/`, {
-      rejection_reason: reason,
-      rejection_notes: rejectNotes,
-    });
-    setRejecting(false);
-    setRejectNotes("");
-    setToast("Ingredient rejected.");
-    const { data } = await api.get(`/ingredients/${id}/`);
-    setForm({ ...empty, ...data, category: data.category || "", supplier: data.supplier || "", shelf_life_days: data.shelf_life_days || "", alternative_ids: data.alternative_ids || [] });
+    try {
+      await api.post(`/ingredients/${id}/reject/`, {
+        rejection_reason: reason,
+        rejection_notes: rejectNotes,
+      });
+      setRejecting(false);
+      setRejectNotes("");
+      showSuccess("Ingredient rejected.");
+      const { data } = await api.get(`/ingredients/${id}/`);
+      setForm({ ...empty, ...data, category: data.category || "", supplier: data.supplier || "", shelf_life_days: data.shelf_life_days || "", alternative_ids: data.alternative_ids || [] });
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not reject ingredient."));
+    }
   };
 
   return (
     <div>
-      {toast && <div className="toast">{toast}</div>}
       <div className="page-breadcrumb hint">
         <Link to="/ingredients">Ingredients</Link> / {isNew ? "Add" : form.name}
       </div>

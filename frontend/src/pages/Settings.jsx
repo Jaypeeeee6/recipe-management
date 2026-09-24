@@ -7,6 +7,7 @@ import Modal from "../components/Modal";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import { canClearData, canManageLabSettings, canManageUsers, canViewAudit, canWrite, roleLabel } from "../utils/roles";
+import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
 
 const ROLES = [
   ["admin", "Admin — full access including secret ingredients"],
@@ -17,11 +18,11 @@ const ROLES = [
 
 export default function Settings() {
   const { user } = useAuth();
+  const { showSuccess, showError, showAlert, confirmDelete, confirm } = useDialogs();
   const [users, setUsers] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ display_name: "", email: "", role: "staff", password: "" });
-  const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(true);
   const [labSettings, setLabSettings] = useState({
     expiry_alert_email: "",
@@ -62,9 +63,14 @@ export default function Settings() {
   };
 
   const deleteUser = async (u) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
-    await api.delete(`/users/${u.id}/`);
-    load();
+    const ok = await confirmDelete("Are you sure you want to delete this user?");
+    if (!ok) return;
+    try {
+      await api.delete(`/users/${u.id}/`);
+      load();
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not delete user."));
+    }
   };
 
   const addCategory = async () => {
@@ -76,9 +82,19 @@ export default function Settings() {
   };
 
   const clearData = async () => {
-    if (!confirm("This will permanently delete ALL data and reset to seed. Are you sure?")) return;
-    await api.post("/settings/clear-data/");
-    setToast("Operational data cleared. Re-run seed_lab to restore demo data.");
+    const ok = await confirm({
+      title: "Clear all data",
+      message: "This will permanently delete ALL data and reset to seed. Are you sure?",
+      confirmText: "Clear data",
+      confirmClass: "modal-confirm-btn-reject",
+    });
+    if (!ok) return;
+    try {
+      await api.post("/settings/clear-data/");
+      showSuccess("Operational data cleared. Re-run seed_lab to restore demo data.");
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not clear data."));
+    }
   };
 
   const saveLabSettings = async () => {
@@ -89,9 +105,9 @@ export default function Settings() {
         expiry_alerts_enabled: labSettings.expiry_alerts_enabled,
       });
       setLabSettings(data);
-      setToast("Expiry alert settings saved.");
+      showSuccess("Expiry alert settings saved.");
     } catch (err) {
-      setToast(err.response?.data?.detail || "Could not save alert settings.");
+      showError(apiErrorMessage(err, "Could not save alert settings."));
     } finally {
       setAlertSaving(false);
     }
@@ -102,18 +118,18 @@ export default function Settings() {
     try {
       const { data } = await api.post("/settings/send-expiry-alerts/");
       if (data.sent) {
-        setToast(`Alert emailed to ${data.recipient} (${data.count} ingredient(s)).`);
+        showSuccess(`Alert emailed to ${data.recipient} (${data.count} ingredient(s)).`);
       } else if (data.skipped === "none_pending") {
-        setToast("No new expiring-soon ingredients to email.");
+        showAlert("No new expiring-soon ingredients to email.");
       } else if (data.skipped === "no_recipient") {
-        setToast("Set an alert email first.");
+        showError("Set an alert email first.");
       } else {
-        setToast(`No email sent (${data.skipped || "unknown"}).`);
+        showAlert(`No email sent (${data.skipped || "unknown"}).`);
       }
       const refreshed = await api.get("/settings/lab/");
       setLabSettings(refreshed.data);
     } catch (err) {
-      setToast(err.response?.data?.detail || "Could not send alerts.");
+      showError(apiErrorMessage(err, "Could not send alerts."));
     } finally {
       setAlertSaving(false);
     }
@@ -125,7 +141,6 @@ export default function Settings() {
 
   return (
     <div>
-      {toast && <div className="toast">{toast}</div>}
       <div className="page-header">
         <div>
           <h1>Settings</h1>

@@ -27,8 +27,7 @@ function priceLabel(item) {
 export function exportIngredientsPdf({ items, grouped, filters = {} }) {
   const list = items || [];
   if (!list.length) {
-    alert("No ingredients to export with the current filters.");
-    return;
+    throw new Error("No ingredients to export with the current filters.");
   }
 
   const sections = grouped?.length
@@ -106,8 +105,7 @@ export function exportIngredientsPdf({ items, grouped, filters = {} }) {
 
   const w = window.open("", "_blank");
   if (!w) {
-    alert("Please allow pop-ups to export the PDF.");
-    return;
+    throw new Error("Please allow pop-ups to export the PDF.");
   }
   w.document.write(html);
   w.document.close();

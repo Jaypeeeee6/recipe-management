@@ -5,6 +5,7 @@ import Icon, { IconAction } from "../components/Icon";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import Stars from "../components/Stars";
+import { useDialogs } from "../dialogs/DialogsContext";
 
 const TYPES = [
   ["food", "Food & Ingredients"],
@@ -15,6 +16,7 @@ const TYPES = [
 ];
 
 export function SupplierList() {
+  const { confirmDelete, showError } = useDialogs();
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [params] = useSearchParams();
@@ -34,9 +36,14 @@ export function SupplierList() {
   } = usePagination(filtered, 10, q);
 
   const remove = async (s) => {
-    if (!confirm("Are you sure you want to delete this supplier?")) return;
-    await api.delete(`/suppliers/${s.id}/`);
-    load();
+    const ok = await confirmDelete("Are you sure you want to delete this supplier?");
+    if (!ok) return;
+    try {
+      await api.delete(`/suppliers/${s.id}/`);
+      load();
+    } catch (err) {
+      showError("Could not delete supplier.");
+    }
   };
 
   return (

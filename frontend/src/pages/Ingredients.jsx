@@ -11,6 +11,7 @@ import { formatDate, formatMoney } from "../utils/format";
 import { exportIngredientsPdf } from "../utils/ingredientExport";
 import { canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
+import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
 
 function canApproveIngredient(item) {
   return item.is_trial && item.trial_status !== "approved";
@@ -28,6 +29,7 @@ function normalizeTab(value) {
 
 export default function Ingredients() {
   const { user } = useAuth();
+  const { showSuccess, showError, confirmDelete } = useDialogs();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -41,7 +43,6 @@ export default function Ingredients() {
   const [rejecting, setRejecting] = useState(null);
   const [reason, setReason] = useState("taste");
   const [notes, setNotes] = useState("");
-  const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(true);
   const [flashId, setFlashId] = useState("");
   const [flashPhase, setFlashPhase] = useState("off"); // on | fading | off
@@ -164,39 +165,47 @@ export default function Ingredients() {
     </div>
   );
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 2500);
-  };
-
   const approve = async (id) => {
-    await api.post(`/ingredients/${id}/approve/`);
-    showToast("Ingredient approved.");
-    const nextTab = items.find((item) => item.id === id)?.is_secret ? "secret" : "approved";
-    setTab(nextTab);
-    setSearchParams({ tab: nextTab });
-    load(nextTab);
+    try {
+      await api.post(`/ingredients/${id}/approve/`);
+      showSuccess("Ingredient approved.");
+      const nextTab = items.find((item) => item.id === id)?.is_secret ? "secret" : "approved";
+      setTab(nextTab);
+      setSearchParams({ tab: nextTab });
+      load(nextTab);
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not approve ingredient."));
+    }
   };
 
   const reject = async () => {
-    await api.post(`/ingredients/${rejecting.id}/reject/`, {
-      rejection_reason: reason,
-      rejection_notes: notes,
-    });
-    setRejecting(null);
-    setNotes("");
-    showToast("Ingredient rejected.");
-    const nextTab = rejecting.is_secret ? "secret" : "trial";
-    setTab(nextTab);
-    setSearchParams({ tab: nextTab });
-    load(nextTab);
+    try {
+      await api.post(`/ingredients/${rejecting.id}/reject/`, {
+        rejection_reason: reason,
+        rejection_notes: notes,
+      });
+      setRejecting(null);
+      setNotes("");
+      showSuccess("Ingredient rejected.");
+      const nextTab = rejecting.is_secret ? "secret" : "trial";
+      setTab(nextTab);
+      setSearchParams({ tab: nextTab });
+      load(nextTab);
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not reject ingredient."));
+    }
   };
 
   const remove = async (item) => {
-    if (!confirm("Are you sure you want to delete this ingredient?")) return;
-    await api.delete(`/ingredients/${item.id}/`);
-    showToast("Ingredient deleted.");
-    load();
+    const ok = await confirmDelete("Are you sure you want to delete this ingredient?");
+    if (!ok) return;
+    try {
+      await api.delete(`/ingredients/${item.id}/`);
+      showSuccess("Ingredient deleted.");
+      load();
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not delete ingredient."));
+    }
   };
 
   const exportPdf = () => {
@@ -227,14 +236,13 @@ export default function Ingredients() {
           statusLabel: statusLabels[status] || "",
         },
       });
-    } catch {
-      alert("Could not export ingredients.");
+    } catch (err) {
+      showError(err?.message || "Could not export ingredients.");
     }
   };
 
   return (
     <div>
-      {toast && <div className="toast">{toast}</div>}
       <div className="page-header">
         <div>
           <h1>Ingredients</h1>

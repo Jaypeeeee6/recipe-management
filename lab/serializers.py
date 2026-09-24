@@ -1,10 +1,12 @@
 from django.contrib.auth.models import User
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import (
     AuditLog,
     Category,
     CommitteeRating,
+    ExpiryUnit,
     Ingredient,
     IngredientPriceHistory,
     LabSettings,
@@ -446,6 +448,35 @@ class MealTrialDetailSerializer(MealTrialListSerializer):
             }
             for u in obj.secret_viewers.select_related("profile").all()
         ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # Only block creating trials that are already past their computed expiry.
+        if self.instance is not None:
+            return attrs
+
+        trial_date = attrs.get("trial_date")
+        expiry_amount = attrs.get("expiry_amount")
+        expiry_unit = attrs.get("expiry_unit") or ExpiryUnit.DAYS
+        if not expiry_amount:
+            return attrs
+
+        probe = MealTrial(
+            trial_date=trial_date,
+            expiry_amount=expiry_amount,
+            expiry_unit=expiry_unit,
+        )
+        expires_at = probe.compute_expires_at()
+        if expires_at and expires_at <= timezone.now():
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        "This trial is already expired based on the trial expiry. "
+                        "You are not allowed to save it."
+                    )
+                }
+            )
+        return attrs
 
     def create(self, validated_data):
         recipe = validated_data.pop("recipe_lines", [])
