@@ -390,6 +390,7 @@ class PrepStep(models.Model):
 
 class ProductEvaluation(models.Model):
     product_name = models.CharField(max_length=200)
+    photo = models.ImageField(upload_to="products/", blank=True)
     ingredients = models.ManyToManyField(
         Ingredient, blank=True, related_name="evaluations"
     )

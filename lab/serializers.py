@@ -577,6 +577,7 @@ class ProductEvaluationSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "product_name",
+            "photo",
             "ingredient_ids",
             "ingredient_titles",
             "trial_ids",
@@ -592,7 +593,7 @@ class ProductEvaluationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at", "ingredient_ids"]
+        read_only_fields = ["created_at", "updated_at", "ingredient_ids", "photo"]
 
     def get_ingredient_titles(self, obj):
         return [

@@ -4,6 +4,7 @@ import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
 import Pagination, { usePagination } from "../components/Pagination";
+import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import SecretBadge from "../components/SecretBadge";
@@ -151,6 +152,9 @@ export function ProductList() {
               {pageItems.map((p) => (
                 <tr key={p.id}>
                   <td className="col-product">
+                    {p.photo ? (
+                      <img className="thumb" src={p.photo} alt="" />
+                    ) : null}
                     <Link to={`/products/${p.id}`}>{p.product_name}</Link>
                     {p.is_secret && <SecretBadge className="badge-secret-inline" />}
                   </td>
@@ -342,6 +346,8 @@ export function ProductForm() {
     is_secret: false,
     secret_viewer_ids: [],
   });
+  const [productPhoto, setProductPhoto] = useState("");
+  const [pendingPhoto, setPendingPhoto] = useState(null);
   const [trialTitles, setTrialTitles] = useState([]);
   const [ingredientTitles, setIngredientTitles] = useState([]);
   const [loading, setLoading] = useState(!isNew);
@@ -367,11 +373,15 @@ export function ProductForm() {
           is_secret: !!r.data.is_secret,
           secret_viewer_ids: r.data.secret_viewer_ids || [],
         });
+        setProductPhoto(r.data.photo || "");
+        setPendingPhoto(null);
         setTrialTitles(r.data.trial_titles || []);
         setIngredientTitles(r.data.ingredient_titles || []);
       }).finally(() => setLoading(false));
     } else {
       setInitialSecret(false);
+      setProductPhoto("");
+      setPendingPhoto(null);
     }
   }, [id, isNew, user]);
 
@@ -425,6 +435,9 @@ export function ProductForm() {
     try {
       if (isNew) {
         const { data } = await api.post("/evaluations/", payload);
+        if (pendingPhoto) {
+          await uploadPendingPhoto(`/evaluations/${data.id}/upload_photo/`, pendingPhoto);
+        }
         setSecretConfirmOpen(false);
         setConfirmPassword("");
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
@@ -554,6 +567,17 @@ export function ProductForm() {
         <div className="field">
           <label className="required">Product Name</label>
           <input className="input" required value={form.product_name} onChange={(e) => setForm({ ...form, product_name: e.target.value })} />
+        </div>
+        <div className="field full">
+          <PhotoUpload
+            label="Dish Photo"
+            hint="Show how the finished meal looks"
+            photoUrl={productPhoto}
+            uploadUrl={isNew ? null : `/evaluations/${id}/upload_photo/`}
+            pendingFile={pendingPhoto}
+            onPendingFile={setPendingPhoto}
+            onUploaded={(data) => setProductPhoto(data.photo || "")}
+          />
         </div>
 
         {!isNew && trialTitles.length > 0 && (

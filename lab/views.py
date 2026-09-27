@@ -558,6 +558,18 @@ class ProductEvaluationViewSet(viewsets.ModelViewSet):
             summary=f"Updated product {obj.product_name}",
         )
 
+    @action(detail=True, methods=["post"])
+    def upload_photo(self, request, pk=None):
+        if not can_write(request.user):
+            return Response({"detail": "Read-only role."}, status=403)
+        product = self.get_object()
+        file = request.FILES.get("photo")
+        if not file:
+            return Response({"detail": "No photo uploaded."}, status=400)
+        product.photo = file
+        product.save(update_fields=["photo", "updated_at"])
+        return Response(ProductEvaluationSerializer(product, context={"request": request}).data)
+
     def perform_destroy(self, instance):
         log_action(
             request=self.request,
