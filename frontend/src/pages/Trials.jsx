@@ -20,7 +20,7 @@ import Stars from "../components/Stars";
 import Money from "../components/Money";
 import PhotoGallery from "../components/PhotoGallery";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
-import { foodCostLabel, foodCostTone, formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, profitMarginLabel, profitMarginTone, sanitizeOmrDecimalInput, verdictLabel } from "../utils/format";
+import { formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, profitMarginLabel, profitMarginTone, sanitizeOmrDecimalInput, verdictLabel } from "../utils/format";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
@@ -137,6 +137,63 @@ function sellingPriceFromMargin(costPerServing, marginPct) {
   const margin = Number(marginPct);
   if (Number.isNaN(cost) || cost < 0 || Number.isNaN(margin) || margin >= 100) return null;
   return roundMoney(cost / (1 - margin / 100));
+}
+
+/** Suggested selling prices for common profit-margin targets. */
+const MARGIN_PRICE_TIERS = [30, 35, 42, 50, 55, 60];
+
+function marginPriceSuggestions(costPerServing) {
+  const cost = Number(costPerServing);
+  if (!cost || cost <= 0 || Number.isNaN(cost)) return [];
+  return MARGIN_PRICE_TIERS.map((pct) => {
+    const price = sellingPriceFromMargin(cost, pct);
+    return {
+      pct,
+      price,
+      label: profitMarginLabel(pct),
+      tone: profitMarginTone(pct),
+    };
+  }).filter((row) => row.price != null);
+}
+
+function MarginPriceSuggest({ costPerServing, currentMargin = null, onPick = null }) {
+  const rows = marginPriceSuggestions(costPerServing);
+  if (rows.length === 0) return null;
+  const interactive = typeof onPick === "function";
+  return (
+    <div className="margin-price-suggest">
+      <div className="margin-price-suggest-head">
+        <div className="k">Suggested selling prices</div>
+        {currentMargin != null && (
+          <div className={`margin-price-suggest-current ${profitMarginTone(currentMargin)}`}>
+            Now {currentMargin}% · {profitMarginLabel(currentMargin)}
+          </div>
+        )}
+      </div>
+      <p className="hint margin-price-suggest-hint">
+        Based on cost per serving {formatMoney(costPerServing)}. Each row shows the selling price for that profit margin.
+        {interactive ? " Click a row to apply it." : ""}
+      </p>
+      <div className="margin-price-suggest-list" role={interactive ? "listbox" : undefined}>
+        {rows.map((row) => {
+          const active = currentMargin != null && Math.abs(Number(currentMargin) - row.pct) < 0.6;
+          const RowTag = interactive ? "button" : "div";
+          return (
+            <RowTag
+              key={row.pct}
+              type={interactive ? "button" : undefined}
+              className={`margin-price-suggest-row${active ? " is-active" : ""}${interactive ? " is-pickable" : ""}`}
+              onClick={interactive ? () => onPick(row.price) : undefined}
+            >
+              <span className={`margin-price-suggest-pct ${row.tone}`}>{row.pct}%</span>
+              <span className={`margin-price-suggest-label ${row.tone}`}>{row.label}</span>
+              <span className="margin-price-suggest-price">{formatMoney(row.price)}</span>
+            </RowTag>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function sanitizePercentInput(raw) {
@@ -1098,6 +1155,13 @@ export function TrialForm() {
         {costPreview.costPerServing <= 0 && (
           <div className="hint" style={{ marginTop: 8 }}>Add priced recipe ingredients to calculate profit.</div>
         )}
+        {costPreview.costPerServing > 0 && (
+          <MarginPriceSuggest
+            costPerServing={costPreview.costPerServing}
+            currentMargin={profitPreview?.margin ?? null}
+            onPick={(price) => onSellingPriceChange(omrFieldValue(price))}
+          />
+        )}
         {profitPreview && (
           <div className="profit-grid" style={{ marginTop: 16 }}>
             <div className="profit-box">
@@ -1108,12 +1172,6 @@ export function TrialForm() {
               <div className="k">Profit Margin</div>
               <div className={`v ${profitMarginTone(profitPreview.margin)}`}>
                 {profitPreview.margin}% · {profitMarginLabel(profitPreview.margin)}
-              </div>
-            </div>
-            <div className="profit-box">
-              <div className="k">Cost as % of Price</div>
-              <div className={`v ${foodCostTone(profitPreview.foodCostPct)}`}>
-                {profitPreview.foodCostPct}% · {foodCostLabel(profitPreview.foodCostPct)}
               </div>
             </div>
             <div className="profit-box">
@@ -1318,7 +1376,6 @@ export function TrialDetail() {
   ];
   const displayAvg = trial.committee_avg ?? trial.avg_rating ?? 0;
   const profit = trial.cost_summary?.profit;
-  const foodPct = profit?.food_cost_pct != null ? Number(profit.food_cost_pct) : null;
   const marginPct = profit?.profit_margin != null ? Number(profit.profit_margin) : null;
   const evalUrl = `${window.location.origin}/evaluate/${trial.id}`;
 
@@ -1520,9 +1577,11 @@ export function TrialDetail() {
                   {profit.profit_margin}% · {profitMarginLabel(marginPct)}
                 </div>
               </div>
-              <div className="profit-box"><div className="k">Cost as % of Price</div><div className={`v ${foodCostTone(foodPct)}`}>{profit.food_cost_pct}% · {foodCostLabel(foodPct)}</div></div>
             </div>
-            <p className="hint">Aim for cost under 30% of selling price</p>
+            <MarginPriceSuggest
+              costPerServing={trial.cost_summary.cost_per_serving}
+              currentMargin={marginPct}
+            />
           </>
         )}
       </div>

@@ -1709,7 +1709,7 @@ td.row-actions > * + * {
   padding: 0;
 }
 
-.profit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
+.profit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 12px; }
 .profit-box { background: #faf8f3; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
 .profit-box .k { font-size: 12px; color: var(--muted); }
 .profit-box .v { font-size: 18px; font-weight: 700; margin-top: 4px; }
@@ -1720,6 +1720,74 @@ td.row-actions > * + * {
 .margin-above { color: #16a34a; }
 .margin-standard { color: #eab308; }
 .margin-below { color: #dc2626; }
+
+.margin-price-suggest {
+  margin-top: 12px;
+  background: #faf8f3;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.margin-price-suggest-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.margin-price-suggest-head .k {
+  font-size: 12px;
+  color: var(--muted);
+}
+.margin-price-suggest-current {
+  font-size: 13px;
+  font-weight: 700;
+}
+.margin-price-suggest-hint {
+  margin: 6px 0 10px;
+}
+.margin-price-suggest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.margin-price-suggest-row {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: #fff;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  box-sizing: border-box;
+}
+.margin-price-suggest-row.is-active {
+  border-color: var(--border-strong, #cfc6b4);
+  background: #fffdf8;
+}
+.margin-price-suggest-row.is-pickable {
+  cursor: pointer;
+}
+.margin-price-suggest-row.is-pickable:hover {
+  border-color: #d9bd7d;
+  background: #fffef9;
+}
+.margin-price-suggest-pct {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.margin-price-suggest-label {
+  font-size: 13px;
+}
+.margin-price-suggest-price {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 
 .committee-page {
   min-height: 100vh;
