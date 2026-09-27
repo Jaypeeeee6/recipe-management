@@ -100,6 +100,26 @@ function resolveStockUnit(line, ingredients = []) {
   return line?.unit || "unit";
 }
 
+/** Compatible measure units for a stock unit (mass / volume / count). */
+function recipeUnitOptions(stockUnit, currentUnit = "") {
+  const key = String(stockUnit || "").toLowerCase();
+  let options;
+  if (key === "kg" || key === "g") options = ["kg", "g"];
+  else if (key === "l" || key === "ml") options = ["L", "ml"];
+  else if (key === "pcs" || key === "pc") options = ["pcs"];
+  else options = stockUnit ? [stockUnit] : ["kg", "g", "L", "ml", "pcs"];
+
+  if (currentUnit && !options.some((u) => u.toLowerCase() === String(currentUnit).toLowerCase())) {
+    options = [...options, currentUnit];
+  }
+  return options;
+}
+
+function matchUnitOption(options, unit) {
+  const found = options.find((u) => u.toLowerCase() === String(unit || "").toLowerCase());
+  return found || options[0] || unit || "";
+}
+
 function roundMoney(n) {
   return Math.round((Number(n) + Number.EPSILON) * 1000) / 1000;
 }
@@ -764,7 +784,7 @@ export function TrialForm() {
         {
           name: ing.name,
           quantity: "",
-          unit: ing.unit === "kg" ? "g" : ing.unit === "L" ? "ml" : ing.unit,
+          unit: ing.unit || "kg",
           stock_unit: ing.unit,
           ingredient: ing.id,
           cost_per_unit: ing.price_per_unit != null ? omrFieldValue(ing.price_per_unit) : "",
@@ -1057,7 +1077,8 @@ export function TrialForm() {
 
         <h3 style={{ marginTop: 20 }}>Recipe Ingredients</h3>
         <p className="hint" style={{ marginBottom: 12 }}>
-          Unit price is OMR per stock unit (e.g. per kg). Line cost is calculated from quantity — e.g. OMR 5/kg × 1 g = OMR 0.005 for that line.
+          Unit price is OMR per stock unit (shown after the price). Pick how you measure for this trial —
+          cost converts automatically (e.g. OMR 5/kg × 100 g = OMR 0.500).
         </p>
         <input className="input" placeholder="Search to add an ingredient…" value={ingSearch} onChange={(e) => setIngSearch(e.target.value)} style={{ maxWidth: 360 }} />
         {matches.map((i) => (
@@ -1075,6 +1096,7 @@ export function TrialForm() {
         )}
         {form.recipe_lines.map((line, i) => {
           const stockUnit = resolveStockUnit(line, ingredients);
+          const unitOptions = recipeUnitOptions(stockUnit, line.unit);
           const lineCost = previewLineCost(line.quantity, line.unit, line.cost_per_unit, stockUnit);
           return (
           <div className="recipe-line" key={i}>
@@ -1088,7 +1110,15 @@ export function TrialForm() {
               onChange={(e) => updateLine(i, { quantity: sanitizeOmrDecimalInput(e.target.value) })}
               onWheel={(e) => e.currentTarget.blur()}
             />
-            <input className="input" value={line.unit} onChange={(e) => updateLine(i, { unit: e.target.value })} />
+            <select
+              className="select"
+              value={matchUnitOption(unitOptions, line.unit || stockUnit)}
+              onChange={(e) => updateLine(i, { unit: e.target.value })}
+            >
+              {unitOptions.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
             <div className="recipe-line-cost">
               <input
                 className="input"
