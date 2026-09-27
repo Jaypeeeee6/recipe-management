@@ -5,6 +5,7 @@ import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
 import Pagination, { usePagination } from "../components/Pagination";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
+import OpenableThumb from "../components/OpenableThumb";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import SecretBadge from "../components/SecretBadge";
@@ -153,7 +154,7 @@ export function ProductList() {
                 <tr key={p.id}>
                   <td className="col-product">
                     {p.photo ? (
-                      <img className="thumb" src={p.photo} alt="" />
+                      <OpenableThumb src={p.photo} alt={p.product_name || ""} />
                     ) : null}
                     <Link to={`/products/${p.id}`}>{p.product_name}</Link>
                     {p.is_secret && <SecretBadge className="badge-secret-inline" />}

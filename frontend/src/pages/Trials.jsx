@@ -20,6 +20,7 @@ import Stars from "../components/Stars";
 import Money from "../components/Money";
 import PhotoGallery from "../components/PhotoGallery";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
+import OpenableThumb from "../components/OpenableThumb";
 import { formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, profitMarginLabel, profitMarginTone, sanitizeOmrDecimalInput, verdictLabel } from "../utils/format";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
@@ -488,7 +489,7 @@ export function TrialList() {
                   <td>{t.code}</td>
                   <td>
                     {t.final_dish_photo || t.photo ? (
-                      <img className="thumb" src={t.final_dish_photo || t.photo} alt="" />
+                      <OpenableThumb src={t.final_dish_photo || t.photo} alt={t.title || ""} />
                     ) : null}
                     <Link to={`/trials/${t.id}`}>{t.title}</Link>
                     {t.is_secret && <SecretBadge className="badge-secret-inline" />}

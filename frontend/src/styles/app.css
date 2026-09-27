@@ -1298,6 +1298,12 @@ label.required::after,
   margin-right: 8px;
   background: #f3f4f6;
 }
+.thumb-openable {
+  cursor: pointer;
+}
+.thumb-openable:hover {
+  opacity: 0.92;
+}
 .trial-hero-photo {
   width: 100%;
   max-height: 280px;
