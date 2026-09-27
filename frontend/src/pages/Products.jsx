@@ -335,7 +335,6 @@ export function ProductForm() {
   const { showError, showSuccess } = useDialogs();
   const [form, setForm] = useState({
     product_name: "",
-    ingredient_ids: [],
     notes: "",
     avg_success_rate: 0,
     avg_rating: 0,
@@ -344,8 +343,7 @@ export function ProductForm() {
     secret_viewer_ids: [],
   });
   const [trialTitles, setTrialTitles] = useState([]);
-  const [ingredients, setIngredients] = useState([]);
-  const [ingSearch, setIngSearch] = useState("");
+  const [ingredientTitles, setIngredientTitles] = useState([]);
   const [loading, setLoading] = useState(!isNew);
   const [initialSecret, setInitialSecret] = useState(false);
   const [secretConfirmOpen, setSecretConfirmOpen] = useState(false);
@@ -354,7 +352,6 @@ export function ProductForm() {
   const [labUsers, setLabUsers] = useState([]);
 
   useEffect(() => {
-    api.get("/ingredients/?tab=approved").then((r) => setIngredients(r.data));
     if (canManageSecretAccess(user)) {
       api.get("/users/").then((r) => setLabUsers(r.data)).catch(() => setLabUsers([]));
     }
@@ -363,7 +360,6 @@ export function ProductForm() {
         setInitialSecret(!!r.data.is_secret);
         setForm({
           product_name: r.data.product_name || "",
-          ingredient_ids: r.data.ingredient_ids || [],
           notes: r.data.notes || "",
           avg_success_rate: r.data.avg_success_rate || 0,
           avg_rating: r.data.avg_rating || 0,
@@ -372,6 +368,7 @@ export function ProductForm() {
           secret_viewer_ids: r.data.secret_viewer_ids || [],
         });
         setTrialTitles(r.data.trial_titles || []);
+        setIngredientTitles(r.data.ingredient_titles || []);
       }).finally(() => setLoading(false));
     } else {
       setInitialSecret(false);
@@ -391,30 +388,6 @@ export function ProductForm() {
   };
 
   const needsSecretPassword = () => form.is_secret && (isNew || !initialSecret);
-
-  const groupedIngredients = useMemo(() => {
-    const visible = ingredients.filter((i) =>
-      `${i.name} ${i.code}`.toLowerCase().includes(ingSearch.toLowerCase())
-    );
-    const map = new Map();
-    for (const item of visible) {
-      const key = item.category_name || "Uncategorized";
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(item);
-    }
-    return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, items]) => ({ name, items }));
-  }, [ingredients, ingSearch]);
-
-  const toggleIngredient = (ingredientId, checked) => {
-    setForm((f) => ({
-      ...f,
-      ingredient_ids: checked
-        ? [...f.ingredient_ids, ingredientId]
-        : f.ingredient_ids.filter((x) => x !== ingredientId),
-    }));
-  };
 
   const save = async (e) => {
     e.preventDefault();
@@ -439,7 +412,6 @@ export function ProductForm() {
   const persist = async (password = "") => {
     const payload = {
       product_name: form.product_name,
-      ingredient_ids: form.ingredient_ids,
       notes: form.notes,
       is_secret: form.is_secret,
       secret_viewer_ids: form.is_secret ? (form.secret_viewer_ids || []) : [],
@@ -501,9 +473,7 @@ export function ProductForm() {
                 product_name: form.product_name,
                 notes: form.notes,
                 trial_titles: trialTitles,
-                ingredient_titles: ingredients
-                  .filter((i) => form.ingredient_ids.includes(i.id))
-                  .map((i) => ({ id: i.id, name: i.name })),
+                ingredient_titles: ingredientTitles,
               })}
             >
               <Icon name="download" /> Export PDF
@@ -588,48 +558,63 @@ export function ProductForm() {
 
         {!isNew && trialTitles.length > 0 && (
           <div className="field" style={{ marginTop: 12 }}>
-            <label>Linked Trials</label>
+            <label>Linked Trials ({trialTitles.length})</label>
             <p className="hint">Synced from approved meal trials</p>
-            {trialTitles.map((t) => (
-              <div key={t.id} style={{ marginBottom: 4 }}>
-                <Link to={`/trials/${t.id}`}>{t.code}</Link> — {t.title}
-              </div>
-            ))}
+            <div className="table-wrap linked-trials-table">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Trial Name</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trialTitles.map((t) => (
+                    <tr key={t.id}>
+                      <td>{t.code || "—"}</td>
+                      <td>{t.title || "—"}</td>
+                      <td className="row-actions">
+                        <Link className="btn btn-ghost" to={`/trials/${t.id}`}>View</Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-        <div className="field" style={{ marginTop: 12 }}>
-          <label>Linked Ingredients</label>
-          <p className="hint">Only approved ingredients can be linked to a product.</p>
-          <input
-            className="input"
-            placeholder="Search approved ingredients…"
-            value={ingSearch}
-            onChange={(e) => setIngSearch(e.target.value)}
-            style={{ maxWidth: 360, marginBottom: 12 }}
-          />
-          {groupedIngredients.length === 0 && (
-            <div className="empty">No approved ingredients found.</div>
-          )}
-          {groupedIngredients.map((section) => (
-            <div key={section.name} className="ingredient-section" style={{ padding: "0 0 12px" }}>
-              <div className="ingredient-section-header">
-                <h3>{section.name}</h3>
-                <span className="hint">{section.items.length} item{section.items.length === 1 ? "" : "s"}</span>
-              </div>
-              {section.items.map((i) => (
-                <label key={i.id} className="remember">
-                  <input
-                    type="checkbox"
-                    checked={form.ingredient_ids.includes(i.id)}
-                    onChange={(e) => toggleIngredient(i.id, e.target.checked)}
-                  />
-                  {i.code} — {i.name}
-                </label>
-              ))}
-            </div>
-          ))}
-        </div>
+        {!isNew && (
+          <div style={{ marginTop: 20 }}>
+            <h3 style={{ margin: 0 }}>Linked Ingredients</h3>
+            <p className="hint" style={{ marginBottom: 12 }}>
+              Synced automatically from linked meal trials
+            </p>
+            {ingredientTitles.length === 0 ? (
+              <div className="hint">No ingredients yet — they appear when linked trials have approved ingredients.</div>
+            ) : (
+              <>
+                <div className="recipe-line recipe-line-header product-ingredient-line">
+                  <span>Ingredient</span>
+                  <span>Category</span>
+                  <span />
+                </div>
+                {ingredientTitles.map((i) => (
+                  <div className="recipe-line product-ingredient-line" key={i.id}>
+                    <div className="input product-ingredient-readonly">
+                      {i.code ? `${i.code} — ${i.name}` : (i.name || "—")}
+                    </div>
+                    <div className="input product-ingredient-readonly">
+                      {i.category_name || "—"}
+                    </div>
+                    <Link className="btn btn-ghost" to={`/ingredients/${i.id}`}>View</Link>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
         <div className="field" style={{ marginTop: 12 }}>
           <label>Notes</label>
           <textarea className="textarea" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

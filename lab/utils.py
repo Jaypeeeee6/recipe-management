@@ -265,6 +265,18 @@ def is_production_ready_trial(trial):
     return trial.verdict == Verdict.SUITABLE
 
 
+def sync_product_ingredients_from_trials(product):
+    """Keep product ingredients exactly equal to the union of linked trials."""
+    from .models import Ingredient
+
+    ingredient_ids = (
+        Ingredient.objects.filter(trials__in=product.trials.all(), is_trial=False)
+        .distinct()
+        .values_list("pk", flat=True)
+    )
+    product.ingredients.set(ingredient_ids)
+
+
 def sync_approved_trial_to_product(trial):
     from .models import ProductEvaluation, Recommendation
 
@@ -281,9 +293,7 @@ def sync_approved_trial_to_product(trial):
         },
     )
     product.trials.add(trial)
-    approved_ingredients = trial.ingredients.filter(is_trial=False)
-    if approved_ingredients.exists():
-        product.ingredients.add(*approved_ingredients)
+    sync_product_ingredients_from_trials(product)
     if trial.notes and not product.notes:
         product.notes = trial.notes
         product.save(update_fields=["notes"])
@@ -303,14 +313,19 @@ def unsync_trial_from_products(trial):
 
     for product in ProductEvaluation.objects.filter(trials=trial):
         product.trials.remove(trial)
+        sync_product_ingredients_from_trials(product)
         refresh_product_averages(product)
 
 
 def sync_all_approved_trials():
-    from .models import MealTrial
+    from .models import MealTrial, ProductEvaluation
 
     for trial in MealTrial.objects.prefetch_related("ingredients"):
         if is_production_ready_trial(trial):
             sync_approved_trial_to_product(trial)
         else:
             unsync_trial_from_products(trial)
+
+    for product in ProductEvaluation.objects.prefetch_related("trials").all():
+        sync_product_ingredients_from_trials(product)
+        refresh_product_averages(product)

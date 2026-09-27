@@ -20,7 +20,7 @@ import Stars from "../components/Stars";
 import Money from "../components/Money";
 import PhotoGallery from "../components/PhotoGallery";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
-import { foodCostLabel, foodCostTone, formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, sanitizeOmrDecimalInput, verdictLabel } from "../utils/format";
+import { foodCostLabel, foodCostTone, formatDate, formatDateTime, formatExpiryUnit, formatMoney, localToday, omrFieldValue, profitMarginLabel, profitMarginTone, sanitizeOmrDecimalInput, verdictLabel } from "../utils/format";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
@@ -92,6 +92,14 @@ function previewLineCost(quantity, recipeUnit, costPerUnit, stockUnit) {
   return qty * price;
 }
 
+/** Prefer linked ingredient stock unit (e.g. kg) over recipe unit (e.g. g). */
+function resolveStockUnit(line, ingredients = []) {
+  if (line?.stock_unit) return line.stock_unit;
+  const linked = ingredients.find((ing) => ing.id === line?.ingredient);
+  if (linked?.unit) return linked.unit;
+  return line?.unit || "unit";
+}
+
 function roundMoney(n) {
   return Math.round((Number(n) + Number.EPSILON) * 1000) / 1000;
 }
@@ -100,10 +108,10 @@ function roundPct(n) {
   return Math.round((Number(n) + Number.EPSILON) * 10) / 10;
 }
 
-function estimateRecipeCost(recipeLines, servings) {
+function estimateRecipeCost(recipeLines, servings, ingredients = []) {
   let total = 0;
   for (const line of recipeLines || []) {
-    const stockUnit = line.stock_unit || line.unit;
+    const stockUnit = resolveStockUnit(line, ingredients);
     const cost = previewLineCost(line.quantity, line.unit, line.cost_per_unit, stockUnit);
     if (cost != null) total += cost;
   }
@@ -546,8 +554,8 @@ function trialApiToDuplicateForm(d) {
   };
 }
 
-function applyFormPricing(nextForm, setProfitMargin, setPricingSource) {
-  const { costPerServing } = estimateRecipeCost(nextForm.recipe_lines, nextForm.servings);
+function applyFormPricing(nextForm, setProfitMargin, setPricingSource, ingredients = []) {
+  const { costPerServing } = estimateRecipeCost(nextForm.recipe_lines, nextForm.servings, ingredients);
   const profit = profitFromSellingPrice(costPerServing, nextForm.selling_price);
   setProfitMargin(profit ? String(profit.margin) : "");
   setPricingSource("price");
@@ -635,8 +643,8 @@ export function TrialForm() {
   const needsSecretPassword = () => form.is_secret && (isNew || !initialSecret);
 
   const costPreview = useMemo(
-    () => estimateRecipeCost(form.recipe_lines, form.servings),
-    [form.recipe_lines, form.servings]
+    () => estimateRecipeCost(form.recipe_lines, form.servings, ingredients),
+    [form.recipe_lines, form.servings, ingredients]
   );
 
   const profitPreview = useMemo(
@@ -1009,7 +1017,7 @@ export function TrialForm() {
           </div>
         )}
         {form.recipe_lines.map((line, i) => {
-          const stockUnit = line.stock_unit || ingredients.find((ing) => ing.id === line.ingredient)?.unit || "unit";
+          const stockUnit = resolveStockUnit(line, ingredients);
           const lineCost = previewLineCost(line.quantity, line.unit, line.cost_per_unit, stockUnit);
           return (
           <div className="recipe-line" key={i}>
@@ -1098,7 +1106,9 @@ export function TrialForm() {
             </div>
             <div className="profit-box">
               <div className="k">Profit Margin</div>
-              <div className="v">{profitPreview.margin}%</div>
+              <div className={`v ${profitMarginTone(profitPreview.margin)}`}>
+                {profitPreview.margin}% · {profitMarginLabel(profitPreview.margin)}
+              </div>
             </div>
             <div className="profit-box">
               <div className="k">Cost as % of Price</div>
@@ -1309,6 +1319,7 @@ export function TrialDetail() {
   const displayAvg = trial.committee_avg ?? trial.avg_rating ?? 0;
   const profit = trial.cost_summary?.profit;
   const foodPct = profit?.food_cost_pct != null ? Number(profit.food_cost_pct) : null;
+  const marginPct = profit?.profit_margin != null ? Number(profit.profit_margin) : null;
   const evalUrl = `${window.location.origin}/evaluate/${trial.id}`;
 
   const CRITERIA = [
@@ -1503,9 +1514,15 @@ export function TrialDetail() {
               <div className="profit-box"><div className="k">Ingredient Cost</div><div className="v">{formatMoney(trial.cost_summary.total_cost)}</div></div>
               <div className="profit-box"><div className="k">Cost per Serving</div><div className="v">{formatMoney(trial.cost_summary.cost_per_serving)}</div></div>
               <div className="profit-box"><div className="k">Gross Profit</div><div className="v">{formatMoney(profit.gross_profit)}</div></div>
+              <div className="profit-box">
+                <div className="k">Profit Margin</div>
+                <div className={`v ${profitMarginTone(marginPct)}`}>
+                  {profit.profit_margin}% · {profitMarginLabel(marginPct)}
+                </div>
+              </div>
               <div className="profit-box"><div className="k">Cost as % of Price</div><div className={`v ${foodCostTone(foodPct)}`}>{profit.food_cost_pct}% · {foodCostLabel(foodPct)}</div></div>
             </div>
-            <p className="hint">Aim for cost under 30% of selling price · Profit margin {profit.profit_margin}%</p>
+            <p className="hint">Aim for cost under 30% of selling price</p>
           </>
         )}
       </div>

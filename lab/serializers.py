@@ -30,6 +30,7 @@ from .permissions import (
 from .utils import (
     trial_cost_summary,
     sync_approved_trial_to_product,
+    sync_product_ingredients_from_trials,
     refresh_product_averages,
     trial_archive_reasons,
     committee_rating_summary,
@@ -280,9 +281,26 @@ class IngredientDetailSerializer(IngredientListSerializer):
 
 
 class RecipeLineSerializer(serializers.ModelSerializer):
+    stock_unit = serializers.SerializerMethodField()
+
     class Meta:
         model = RecipeLine
-        fields = ["id", "name", "quantity", "unit", "ingredient", "cost_per_unit", "sort_order"]
+        fields = [
+            "id",
+            "name",
+            "quantity",
+            "unit",
+            "ingredient",
+            "cost_per_unit",
+            "sort_order",
+            "stock_unit",
+        ]
+        read_only_fields = ["stock_unit"]
+
+    def get_stock_unit(self, obj):
+        if obj.ingredient_id and getattr(obj, "ingredient", None):
+            return obj.ingredient.unit
+        return obj.unit
 
 
 class PrepStepSerializer(serializers.ModelSerializer):
@@ -538,8 +556,7 @@ class ProductEvaluationSerializer(serializers.ModelSerializer):
     ingredient_ids = serializers.PrimaryKeyRelatedField(
         source="ingredients",
         many=True,
-        queryset=Ingredient.objects.filter(is_trial=False).select_related("category"),
-        required=False,
+        read_only=True,
     )
     trial_ids = serializers.PrimaryKeyRelatedField(
         source="trials", many=True, queryset=MealTrial.objects.all(), required=False
@@ -575,7 +592,7 @@ class ProductEvaluationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["created_at", "updated_at", "ingredient_ids"]
 
     def get_ingredient_titles(self, obj):
         return [
@@ -619,34 +636,31 @@ class ProductEvaluationSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        ingredients = validated_data.pop("ingredients", [])
         trials = validated_data.pop("trials", [])
         viewers = validated_data.pop("secret_viewers", None)
         obj = ProductEvaluation.objects.create(**validated_data)
-        obj.ingredients.set(ingredients)
         obj.trials.set(trials)
         if obj.is_secret and viewers is not None:
             obj.secret_viewers.set(viewers)
         elif not obj.is_secret:
             obj.secret_viewers.clear()
+        sync_product_ingredients_from_trials(obj)
         self._refresh_averages(obj)
         return obj
 
     def update(self, instance, validated_data):
-        ingredients = validated_data.pop("ingredients", None)
         trials = validated_data.pop("trials", None)
         viewers = validated_data.pop("secret_viewers", serializers.empty)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        if ingredients is not None:
-            instance.ingredients.set(ingredients)
         if trials is not None:
             instance.trials.set(trials)
         if not instance.is_secret:
             instance.secret_viewers.clear()
         elif viewers is not serializers.empty:
             instance.secret_viewers.set(viewers)
+        sync_product_ingredients_from_trials(instance)
         self._refresh_averages(instance)
         return instance
 

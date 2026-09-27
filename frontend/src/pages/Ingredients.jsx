@@ -112,6 +112,15 @@ export default function Ingredients() {
     return flashPhase === "fading" ? "row-highlight-fade" : "row-highlight";
   };
 
+  const expired = useMemo(
+    () => items.filter((i) => i.expiry_status === "expired"),
+    [items]
+  );
+  const expiringSoon = useMemo(
+    () => items.filter((i) => i.expiry_status === "expiring_soon"),
+    [items]
+  );
+
   const filtered = useMemo(() => items, [items]);
 
   const {
@@ -267,6 +276,43 @@ export default function Ingredients() {
         </div>
       </div>
 
+      {expired.length > 0 && (
+        <div className="alert alert-danger" role="alert">
+          <strong>
+            {expired.length === 1
+              ? "1 ingredient is expired"
+              : `${expired.length} ingredients are expired`}
+          </strong>
+          <ul className="alert-list">
+            {expired.map((i) => (
+              <li key={i.id}>
+                <Link to={`/ingredients/${i.id}`}>{i.code || i.name}</Link>
+                {i.name ? ` — ${i.name}` : ""}
+                {i.expiry_date ? ` (expired ${formatDate(i.expiry_date)})` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {expiringSoon.length > 0 && (
+        <div className="alert alert-warn" role="alert">
+          <strong>
+            {expiringSoon.length === 1
+              ? "1 ingredient is expiring soon"
+              : `${expiringSoon.length} ingredients are expiring soon`}
+          </strong>
+          <ul className="alert-list">
+            {expiringSoon.map((i) => (
+              <li key={i.id}>
+                <Link to={`/ingredients/${i.id}`}>{i.code || i.name}</Link>
+                {i.name ? ` — ${i.name}` : ""}
+                {i.expiry_date ? ` (expires ${formatDate(i.expiry_date)})` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="tabs">
         <button
           type="button"
@@ -364,11 +410,17 @@ export default function Ingredients() {
                   </tr>
                 </thead>
                 <tbody>
-                  {section.items.map((i) => (
+                  {section.items.map((i) => {
+                    const highlight = flashClass(i.id);
+                    const rowClass = [
+                      i.expiry_status === "expired" ? "row-expired" : "",
+                      highlight || "",
+                    ].filter(Boolean).join(" ") || undefined;
+                    return (
                     <tr
                       key={i.id}
                       data-ingredient-id={i.id}
-                      className={flashClass(i.id)}
+                      className={rowClass}
                     >
                       <td>{i.code}</td>
                       <td>
@@ -386,7 +438,9 @@ export default function Ingredients() {
                           : "—"}
                       </td>
                       <td>{i.created_at ? formatDate(i.created_at) : "—"}</td>
-                      <td>{i.expiry_date || "—"}</td>
+                      <td className={i.expiry_status === "expiring_soon" ? "text-expiry-danger" : undefined}>
+                        {i.expiry_date || "—"}
+                      </td>
                       <td>
                         {i.is_trial ? (
                           <StatusBadge value={i.trial_status} />
@@ -396,7 +450,8 @@ export default function Ingredients() {
                       </td>
                       {renderActions(i)}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

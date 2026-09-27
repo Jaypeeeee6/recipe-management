@@ -120,3 +120,24 @@ export function foodCostLabel(pct) {
   if (pct < 35) return "A bit high";
   return "Too high vs 30% target";
 }
+
+/** Internal meal-trial profit margin benchmark — do not surface this number in the UI. */
+const STANDARD_PROFIT_MARGIN = 42;
+
+export function profitMarginTone(pct) {
+  if (pct == null || pct === "") return "";
+  const n = Number(pct);
+  if (Number.isNaN(n)) return "";
+  if (n < STANDARD_PROFIT_MARGIN) return "margin-below";
+  if (n > STANDARD_PROFIT_MARGIN) return "margin-above";
+  return "margin-standard";
+}
+
+export function profitMarginLabel(pct) {
+  if (pct == null || pct === "") return "";
+  const n = Number(pct);
+  if (Number.isNaN(n)) return "";
+  if (n < STANDARD_PROFIT_MARGIN) return "Below standard";
+  if (n > STANDARD_PROFIT_MARGIN) return "Above standard";
+  return "Standard";
+}

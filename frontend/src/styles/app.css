@@ -839,6 +839,18 @@ table.data tr:hover td { background: #faf8f3; }
   line-height: 1.35;
   color: var(--text);
 }
+.linked-trials-table {
+  margin-top: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+.linked-trials-table .data {
+  margin: 0;
+}
+.linked-trials-table .btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
 .btn-show-more {
   align-self: flex-start;
   margin-top: 4px;
@@ -1597,6 +1609,15 @@ td.row-actions > * + * {
   font-size: 12px;
   font-weight: 600;
 }
+.product-ingredient-line {
+  grid-template-columns: 1.5fr 1fr auto;
+}
+.product-ingredient-readonly {
+  display: flex;
+  align-items: center;
+  background: #f9fafb;
+  color: var(--text);
+}
 .step-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .step-row span {
   width: 24px; height: 24px; border-radius: 50%;
@@ -1627,17 +1648,39 @@ td.row-actions > * + * {
   border: 1px solid #f59e0b;
   color: #92400e;
 }
+.alert-danger {
+  background: #fef2f2;
+  border: 1px solid #f87171;
+  color: #991b1b;
+}
 .alert-list {
   margin: 8px 0 0;
   padding-left: 18px;
 }
 .alert-list a {
-  color: #92400e;
+  color: inherit;
   font-weight: 600;
   text-decoration: underline;
 }
+.alert-warn .alert-list a {
+  color: #92400e;
+}
+.alert-danger .alert-list a {
+  color: #991b1b;
+}
 .row-warn {
   background: #fffbeb;
+}
+.row-expired {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.row-expired a {
+  color: #991b1b;
+}
+.text-expiry-danger {
+  color: #991b1b;
+  font-weight: 600;
 }
 .hint-warn {
   color: #b45309;
@@ -1674,6 +1717,9 @@ td.row-actions > * + * {
 .food-good { color: #65a30d; }
 .food-warn { color: #d97706; }
 .food-danger { color: #dc2626; }
+.margin-above { color: #16a34a; }
+.margin-standard { color: #eab308; }
+.margin-below { color: #dc2626; }
 
 .committee-page {
   min-height: 100vh;
@@ -1809,6 +1855,7 @@ td.row-actions > * + * {
   .page-header { flex-direction: column; align-items: flex-start; }
   .search-field input { width: 180px; }
   .recipe-line { grid-template-columns: 1fr 1fr; }
+  .product-ingredient-line { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .hamburger { display: inline-flex; }
