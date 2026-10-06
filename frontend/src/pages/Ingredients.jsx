@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Modal from "../components/Modal";
@@ -44,9 +44,11 @@ export default function Ingredients() {
   const [reason, setReason] = useState("taste");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [flashId, setFlashId] = useState("");
   const [flashPhase, setFlashPhase] = useState("off"); // on | fading | off
   const highlightParam = params.get("highlight");
+  const fileInputRef = useRef(null);
 
   const load = (activeTab = tab) => {
     const query = new URLSearchParams({ tab: activeTab });
@@ -250,6 +252,63 @@ export default function Ingredients() {
     }
   };
 
+  const downloadImportTemplate = async () => {
+    try {
+      const { data } = await api.get("/ingredients/import-template/", { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ingredient_import_template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not download import template."));
+    }
+  };
+
+  const onImportExcel = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const { data } = await api.post("/ingredients/import-excel/", body, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const errCount = data.errors?.length || 0;
+      if (data.created) {
+        showSuccess(
+          errCount
+            ? `Imported ${data.created} ingredient(s). ${errCount} row(s) had errors.`
+            : `Imported ${data.created} ingredient(s).`
+        );
+        load();
+      } else if (errCount) {
+        const first = data.errors[0];
+        showError(
+          `Import failed. Row ${first.row}: ${first.message}` +
+            (errCount > 1 ? ` (+${errCount - 1} more)` : "")
+        );
+      } else {
+        showError("No ingredients were imported.");
+      }
+    } catch (err) {
+      const payload = err?.response?.data;
+      if (payload?.errors?.length) {
+        const first = payload.errors[0];
+        showError(`Import failed. Row ${first.row}: ${first.message}`);
+      } else {
+        showError(apiErrorMessage(err, "Could not import Excel file."));
+      }
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -268,10 +327,37 @@ export default function Ingredients() {
             Export PDF
           </button>
           {canWrite(user) && (
-            <Link className="btn btn-add" to="/ingredients/new">
-              <Icon name="plus" />
-              {tab === "trial" ? "Add Trial Product" : "Add Ingredient"}
-            </Link>
+            <>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={downloadImportTemplate}
+                disabled={importing}
+              >
+                <Icon name="download" />
+                Excel template
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                <Icon name="plus" />
+                {importing ? "Importing…" : "Import Excel"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                hidden
+                onChange={onImportExcel}
+              />
+              <Link className="btn btn-add" to="/ingredients/new">
+                <Icon name="plus" />
+                {tab === "trial" ? "Add Trial Product" : "Add Ingredient"}
+              </Link>
+            </>
           )}
         </div>
       </div>

@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db.models import Avg, Count, Prefetch, Q
 from django.db.models.functions import TruncMonth, TruncWeek
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -14,6 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .audit import log_action
 from .expiry_alerts import maybe_run_expiry_alerts, send_trial_expiry_alerts
+from .ingredient_import import build_ingredient_import_template, import_ingredients_from_excel
 from .models import (
     AuditLog,
     Category,
@@ -36,6 +38,7 @@ from .permissions import (
     can_manage_lab_settings,
     can_manage_secret_access,
     can_manage_users,
+    can_see_secrets,
     can_view_audit,
     can_write,
     is_admin,
@@ -340,6 +343,45 @@ class IngredientViewSet(viewsets.ModelViewSet):
             summary=f"Rejected ingredient {ingredient.code}",
         )
         return Response(IngredientDetailSerializer(ingredient, context={"request": request}).data)
+
+    @action(detail=False, methods=["get"], url_path="import-template")
+    def import_template(self, request):
+        if not can_write(request.user):
+            return Response({"detail": "Read-only role."}, status=403)
+        content = build_ingredient_import_template()
+        response = HttpResponse(
+            content,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="ingredient_import_template.xlsx"'
+        return response
+
+    @action(detail=False, methods=["post"], url_path="import-excel")
+    def import_excel(self, request):
+        if not can_write(request.user):
+            return Response({"detail": "Read-only role."}, status=403)
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response({"detail": "Upload an Excel .xlsx file as 'file'."}, status=400)
+        name = (upload.name or "").lower()
+        if not name.endswith(".xlsx"):
+            return Response({"detail": "Only .xlsx Excel files are supported."}, status=400)
+        result = import_ingredients_from_excel(
+            upload,
+            allow_secret=can_see_secrets(request.user),
+        )
+        log_action(
+            request=request,
+            action="import",
+            entity_type="ingredient",
+            entity_id=None,
+            summary=(
+                f"Imported ingredients from Excel: "
+                f"{result['created']} created, {len(result['errors'])} errors"
+            ),
+        )
+        status_code = status.HTTP_200_OK if result["created"] or not result["errors"] else status.HTTP_400_BAD_REQUEST
+        return Response(result, status=status_code)
 
 
 class MealTrialViewSet(viewsets.ModelViewSet):
