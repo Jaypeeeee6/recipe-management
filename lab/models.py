@@ -242,7 +242,7 @@ class MealTrial(models.Model):
     selling_price = models.DecimalField(
         max_digits=12, decimal_places=3, null=True, blank=True
     )
-    cooking_temperature = models.PositiveIntegerField(null=True, blank=True)
+    cooking_temperature = models.IntegerField(null=True, blank=True)
     cooking_duration = models.PositiveIntegerField(null=True, blank=True)
     repetition_number = models.PositiveIntegerField(default=1)
     expiry_amount = models.PositiveIntegerField(null=True, blank=True)
@@ -381,7 +381,8 @@ class PrepStep(models.Model):
     trial = models.ForeignKey(
         MealTrial, on_delete=models.CASCADE, related_name="prep_steps"
     )
-    text = models.TextField()
+    text = models.TextField(blank=True)
+    photo = models.ImageField(upload_to="trials/prep_steps/", blank=True)
     sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:

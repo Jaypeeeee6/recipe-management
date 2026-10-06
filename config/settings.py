@@ -27,9 +27,10 @@ def _local_ip():
         return None
 
 
-ALLOWED_HOSTS = ["*"] if DEBUG else []
+_allowed = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
+ALLOWED_HOSTS = _allowed if _allowed else (["*"] if DEBUG else ["127.0.0.1", "localhost"])
 
-_dev_port = os.getenv("DEV_SERVER_PORT", "8000")
+_dev_port = os.getenv("DEV_SERVER_PORT", "8092")
 CSRF_TRUSTED_ORIGINS = [
     f"http://localhost:{_dev_port}",
     f"http://127.0.0.1:{_dev_port}",
@@ -40,6 +41,10 @@ _ip = _local_ip()
 if _ip:
     CSRF_TRUSTED_ORIGINS.append(f"http://{_ip}:{_dev_port}")
     CSRF_TRUSTED_ORIGINS.append(f"http://{_ip}:5173")
+for host in ALLOWED_HOSTS:
+    if host and host != "*":
+        CSRF_TRUSTED_ORIGINS.append(f"http://{host}:{_dev_port}")
+        CSRF_TRUSTED_ORIGINS.append(f"https://{host}")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

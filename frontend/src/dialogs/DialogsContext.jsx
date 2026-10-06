@@ -163,15 +163,40 @@ function ConfirmDialog({ open, title, message, cancelText, confirmText, confirmC
 }
 
 export function apiErrorMessage(err, fallback = "Something went wrong.") {
+  const formatValue = (v) => {
+    if (v == null) return "";
+    if (typeof v === "string") return v;
+    if (typeof v === "number" || typeof v === "boolean") return String(v);
+    if (Array.isArray(v)) {
+      return v
+        .map((item) => {
+          if (item == null) return "";
+          if (typeof item === "string") return item;
+          if (typeof item === "object") {
+            return Object.entries(item)
+              .map(([ik, iv]) => `${ik}: ${formatValue(iv)}`)
+              .join(", ");
+          }
+          return String(item);
+        })
+        .filter(Boolean)
+        .join("; ");
+    }
+    if (typeof v === "object") {
+      return Object.entries(v)
+        .map(([ik, iv]) => `${ik}: ${formatValue(iv)}`)
+        .join(", ");
+    }
+    return String(v);
+  };
+
   const detail = err?.response?.data;
   if (typeof detail === "string") return detail;
   if (detail?.detail != null) {
-    return Array.isArray(detail.detail) ? detail.detail[0] : String(detail.detail);
+    return Array.isArray(detail.detail) ? formatValue(detail.detail) : String(detail.detail);
   }
   if (detail && typeof detail === "object") {
-    const parts = Object.entries(detail).map(
-      ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`
-    );
+    const parts = Object.entries(detail).map(([k, v]) => `${k}: ${formatValue(v)}`);
     if (parts.length) return parts.join("; ");
   }
   return fallback;

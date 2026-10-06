@@ -611,7 +611,12 @@ function trialApiToForm(d) {
       quantity: omrFieldValue(line.quantity),
       cost_per_unit: omrFieldValue(line.cost_per_unit),
     })),
-    prep_steps: (d.prep_steps || []).map((s) => ({ text: s.text })),
+    prep_steps: (d.prep_steps || []).map((s) => ({
+      id: s.id,
+      text: s.text,
+      photo: s.photo || "",
+      pendingPhoto: null,
+    })),
   };
 }
 
@@ -823,6 +828,16 @@ export function TrialForm() {
     await persist(confirmPassword);
   };
 
+  const uploadStepPhotos = async (trialId, savedSteps) => {
+    for (let i = 0; i < form.prep_steps.length; i += 1) {
+      const pending = form.prep_steps[i].pendingPhoto;
+      const stepId = savedSteps?.[i]?.id;
+      if (pending && stepId) {
+        await uploadPendingPhoto(`/trials/${trialId}/prep-steps/${stepId}/upload_photo/`, pending);
+      }
+    }
+  };
+
   const persist = async (password = "") => {
     const expiryAmount = form.expiry_amount === "" ? null : Number(form.expiry_amount);
     const expiryUnit = form.expiry_unit || "days";
@@ -852,7 +867,13 @@ export function TrialForm() {
       is_secret: form.is_secret,
       secret_viewer_ids: form.is_secret ? (form.secret_viewer_ids || []) : [],
       ingredient_ids: form.ingredient_ids,
-      prep_steps: form.prep_steps.map((s, i) => ({ text: s.text, sort_order: i })),
+      prep_steps: form.prep_steps
+        .filter((s) => (s.text || "").trim() || s.id || s.pendingPhoto || s.photo)
+        .map((s, i) => ({
+          ...(s.id ? { id: s.id } : {}),
+          text: s.text || "",
+          sort_order: i,
+        })),
       recipe_lines: form.recipe_lines.map((l, i) => ({
         name: l.name,
         quantity: l.quantity === "" ? 0 : l.quantity,
@@ -877,6 +898,7 @@ export function TrialForm() {
         if (pendingPhoto) {
           await uploadPendingPhoto(`/trials/${data.id}/upload_photo/`, pendingPhoto, "final_dish_photo");
         }
+        await uploadStepPhotos(data.id, data.prep_steps || []);
         setSecretConfirmOpen(false);
         setConfirmPassword("");
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
@@ -888,6 +910,7 @@ export function TrialForm() {
         }
       } else {
         const { data } = await api.patch(`/trials/${id}/`, payload);
+        await uploadStepPhotos(data.id, data.prep_steps || []);
         setSecretConfirmOpen(false);
         setConfirmPassword("");
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
@@ -1064,7 +1087,15 @@ export function TrialForm() {
           </div>
           <div className="field">
             <label>Cooking Temperature (°C)</label>
-            <input className="input" type="number" value={form.cooking_temperature} onChange={(e) => set("cooking_temperature", e.target.value)} />
+            <input
+              className="input"
+              type="number"
+              step="1"
+              placeholder="e.g. -18 or 180"
+              value={form.cooking_temperature}
+              onChange={(e) => set("cooking_temperature", e.target.value)}
+            />
+            <div className="hint">Can be negative (e.g. freezer temperature)</div>
           </div>
           <div className="field">
             <label>Cooking Duration (min)</label>
@@ -1235,17 +1266,54 @@ export function TrialForm() {
 
         <h3 style={{ marginTop: 20 }}>Preparation Steps</h3>
         {form.prep_steps.map((s, i) => (
-          <div className="step-row" key={i}>
-            <span>{i + 1}</span>
-            <textarea className="textarea" value={s.text} onChange={(e) => {
-              const steps = [...form.prep_steps];
-              steps[i] = { text: e.target.value };
-              set("prep_steps", steps);
-            }} />
-            <button type="button" className="icon-btn" onClick={() => set("prep_steps", form.prep_steps.filter((_, idx) => idx !== i))}>✕</button>
+          <div className="step-row step-row-with-photo" key={s.id || `new-${i}`}>
+            <div className="step-row-main">
+              <span>{i + 1}</span>
+              <textarea
+                className="textarea"
+                value={s.text}
+                onChange={(e) => {
+                  const steps = [...form.prep_steps];
+                  steps[i] = { ...steps[i], text: e.target.value };
+                  set("prep_steps", steps);
+                }}
+              />
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => set("prep_steps", form.prep_steps.filter((_, idx) => idx !== i))}
+              >
+                ✕
+              </button>
+            </div>
+            <PhotoUpload
+              label={`Step ${i + 1} photo`}
+              hint="Optional photo for this preparation step"
+              photoUrl={s.photo || ""}
+              uploadUrl={!isNew && s.id ? `/trials/${id}/prep-steps/${s.id}/upload_photo/` : null}
+              pendingFile={s.pendingPhoto || null}
+              onPendingFile={(file) => {
+                const steps = [...form.prep_steps];
+                steps[i] = { ...steps[i], pendingPhoto: file };
+                set("prep_steps", steps);
+              }}
+              onUploaded={(data) => {
+                const steps = [...form.prep_steps];
+                steps[i] = {
+                  ...steps[i],
+                  photo: data.photo || steps[i].photo,
+                  pendingPhoto: null,
+                };
+                set("prep_steps", steps);
+              }}
+            />
           </div>
         ))}
-        <button type="button" className="btn btn-ghost" onClick={() => set("prep_steps", [...form.prep_steps, { text: "" }])}>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => set("prep_steps", [...form.prep_steps, { text: "", photo: "", pendingPhoto: null }])}
+        >
           <Icon name="plus" />
           Add Step
         </button>
@@ -1433,7 +1501,7 @@ export function TrialDetail() {
       ${trial.recipe_lines.map((l) => `<tr><td>${l.name}</td><td>${l.quantity}</td><td>${l.unit}</td></tr>`).join("")}
       </table>
       <h3>Preparation Steps</h3>
-      <ol>${trial.prep_steps.map((s) => `<li>${s.text}</li>`).join("")}</ol>
+      <ol>${(trial.prep_steps || []).map((s) => `<li>${s.text}${s.photo ? `<br/><img src="${s.photo}" alt="" style="max-width:220px;margin-top:6px;border-radius:8px"/>` : ""}</li>`).join("")}</ol>
       ${trial.notes ? `<h3>Notes</h3><p>${trial.notes}</p>` : ""}
       </body></html>`;
     const w = window.open("", "_blank");
@@ -1620,7 +1688,18 @@ export function TrialDetail() {
       <div className="card card-pad" style={{ marginBottom: 16 }}>
         <h3>Preparation Steps</h3>
         {trial.prep_steps.length === 0 && <div className="empty">No preparation steps added yet.</div>}
-        <ol>{trial.prep_steps.map((s) => <li key={s.id} style={{ marginBottom: 8 }}>{s.text}</li>)}</ol>
+        <ol className="prep-steps-detail">
+          {trial.prep_steps.map((s) => (
+            <li key={s.id} style={{ marginBottom: 16 }}>
+              <div>{s.text}</div>
+              {s.photo && (
+                <div style={{ marginTop: 8 }}>
+                  <OpenableThumb src={s.photo} alt={`Step ${s.sort_order + 1}`} />
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
         {trial.notes && <><h3>Notes</h3><p>{trial.notes}</p></>}
       </div>
 

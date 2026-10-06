@@ -19,7 +19,7 @@ from .models import (
     UserProfile,
 )
 from .permissions import (
-    can_clear_data,
+    can_manage_categories,
     can_manage_lab_settings,
     can_manage_secret_access,
     can_manage_users,
@@ -55,7 +55,7 @@ class UserSerializer(serializers.ModelSerializer):
             "can_manage_secret_access": can_manage_secret_access(obj),
             "can_manage_lab_settings": can_manage_lab_settings(obj),
             "can_view_audit": can_view_audit(obj),
-            "can_clear_data": can_clear_data(obj),
+            "can_manage_categories": can_manage_categories(obj),
         }
 
 
@@ -304,9 +304,12 @@ class RecipeLineSerializer(serializers.ModelSerializer):
 
 
 class PrepStepSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False, allow_null=True)
+
     class Meta:
         model = PrepStep
-        fields = ["id", "text", "sort_order"]
+        fields = ["id", "text", "photo", "sort_order"]
+        read_only_fields = ["photo"]
 
 
 class CommitteeRatingSerializer(serializers.ModelSerializer):
@@ -543,13 +546,34 @@ class MealTrialDetailSerializer(MealTrialListSerializer):
                     k: v for k, v in line.items() if k not in ("sort_order", "id")
                 })
         if steps is not None:
-            trial.prep_steps.all().delete()
+            keep_ids = []
             for i, step in enumerate(steps):
-                PrepStep.objects.create(
+                if hasattr(step, "items"):
+                    data = dict(step)
+                else:
+                    data = {
+                        "id": getattr(step, "id", None),
+                        "text": getattr(step, "text", "") or "",
+                        "sort_order": getattr(step, "sort_order", i),
+                    }
+                text = data.get("text") or ""
+                sort_order = data.get("sort_order", i)
+                step_id = data.get("id")
+                if step_id:
+                    updated = PrepStep.objects.filter(pk=step_id, trial=trial).update(
+                        text=text,
+                        sort_order=sort_order,
+                    )
+                    if updated:
+                        keep_ids.append(step_id)
+                        continue
+                obj = PrepStep.objects.create(
                     trial=trial,
-                    text=step["text"],
-                    sort_order=step.get("sort_order", i),
+                    text=text,
+                    sort_order=sort_order,
                 )
+                keep_ids.append(obj.id)
+            trial.prep_steps.exclude(id__in=keep_ids).delete()
 
 
 class ProductEvaluationSerializer(serializers.ModelSerializer):

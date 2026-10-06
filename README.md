@@ -60,10 +60,10 @@ npm run build
 ### 3. Run
 
 ```bash
-python manage.py runserver 8000
+python manage.py runserver 8092
 ```
 
-Open http://127.0.0.1:8000/
+Open http://127.0.0.1:8092/
 
 For live frontend reload during UI work, also run `npm run dev` in `frontend/` and use http://localhost:5173 (Vite proxies `/api` to Django).
 

@@ -1625,7 +1625,21 @@ td.row-actions > * + * {
   color: var(--text);
 }
 .step-row { display: flex; gap: 8px; margin-bottom: 8px; }
-.step-row span {
+.step-row-with-photo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.step-row-main {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.step-row span,
+.step-row-main > span {
   width: 24px; height: 24px; border-radius: 50%;
   background: var(--accent); color: #7c5c1e;
   display: flex; align-items: center; justify-content: center;

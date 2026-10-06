@@ -32,7 +32,7 @@ from .models import (
 )
 from .permissions import (
     IsAuthenticatedReadOrWriteRole,
-    can_clear_data,
+    can_manage_categories,
     can_manage_lab_settings,
     can_manage_secret_access,
     can_manage_users,
@@ -81,7 +81,27 @@ def _profile(user):
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticatedReadOrWriteRole]
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        if not can_manage_categories(request.user):
+            return Response({"detail": "Admin only."}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if not can_manage_categories(request.user):
+            return Response({"detail": "Admin only."}, status=status.HTTP_403_FORBIDDEN)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if not can_manage_categories(request.user):
+            return Response({"detail": "Admin only."}, status=status.HTTP_403_FORBIDDEN)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not can_manage_categories(request.user):
+            return Response({"detail": "Admin only."}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -480,6 +500,32 @@ class MealTrialViewSet(viewsets.ModelViewSet):
         setattr(trial, field, file)
         trial.save()
         return Response(MealTrialDetailSerializer(trial, context={"request": request}).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"prep-steps/(?P<step_id>[^/.]+)/upload_photo",
+    )
+    def upload_prep_step_photo(self, request, pk=None, step_id=None):
+        if not can_write(request.user):
+            return Response({"detail": "Read-only role."}, status=403)
+        trial = self.get_object()
+        step = trial.prep_steps.filter(pk=step_id).first()
+        if not step:
+            return Response({"detail": "Prep step not found."}, status=404)
+        file = request.FILES.get("photo")
+        if not file:
+            return Response({"detail": "No photo uploaded."}, status=400)
+        step.photo = file
+        step.save(update_fields=["photo"])
+        return Response(
+            {
+                "id": step.id,
+                "text": step.text,
+                "photo": request.build_absolute_uri(step.photo.url) if step.photo else "",
+                "sort_order": step.sort_order,
+            }
+        )
 
 
 class ProductEvaluationViewSet(viewsets.ModelViewSet):
@@ -1105,7 +1151,7 @@ def trial_committee_ratings(request, pk):
 @permission_classes([IsAuthenticated])
 def audit_logs_view(request):
     if not can_view_audit(request.user):
-        return Response({"detail": "Admin or IT only."}, status=403)
+        return Response({"detail": "IT only."}, status=403)
     qs = AuditLog.objects.select_related("actor", "actor__profile").all()
     action = request.query_params.get("action")
     if action:
@@ -1161,22 +1207,3 @@ def send_expiry_alerts_now(request):
         metadata=result,
     )
     return Response(result)
-
-
-@api_view(["POST"])
-def clear_all_data(request):
-    if not can_clear_data(request.user):
-        return Response({"detail": "Admin only."}, status=403)
-    log_action(
-        request=request,
-        action="clear_data",
-        entity_type="system",
-        summary="Cleared all operational data",
-    )
-    CommitteeRating.objects.all().delete()
-    ProductEvaluation.objects.all().delete()
-    MealTrial.objects.all().delete()
-    IngredientPriceHistory.objects.all().delete()
-    Ingredient.objects.all().delete()
-    Supplier.objects.all().delete()
-    return Response({"detail": "Operational data cleared. Re-run seed_lab to restore demo data."})

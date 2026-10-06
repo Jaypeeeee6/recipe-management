@@ -17,7 +17,7 @@ export function perms(user) {
     can_manage_secret_access: false,
     can_manage_lab_settings: false,
     can_view_audit: false,
-    can_clear_data: false,
+    can_manage_categories: false,
   };
 }
 
@@ -43,9 +43,9 @@ export function canManageLabSettings(user) {
 }
 
 export function canViewAudit(user) {
-  return !!perms(user).can_view_audit;
+  return user?.role === "it" || !!perms(user).can_view_audit;
 }
 
-export function canClearData(user) {
-  return !!perms(user).can_clear_data;
+export function canManageCategories(user) {
+  return user?.role === "admin" || !!perms(user).can_manage_categories;
 }

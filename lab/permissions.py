@@ -80,12 +80,13 @@ def can_manage_lab_settings(user):
 
 
 def can_view_audit(user):
-    """Admin and IT can view audit logs."""
-    return user_role(user) in (Role.ADMIN, Role.IT)
+    """Only IT can view audit logs."""
+    return is_it(user)
 
 
-def can_clear_data(user):
-    return user_role(user) == Role.ADMIN
+def can_manage_categories(user):
+    """Only Admin can view/manage categories in Settings (and create/update/delete)."""
+    return is_admin(user)
 
 
 class IsAuthenticatedReadOrWriteRole(BasePermission):

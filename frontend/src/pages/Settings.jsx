@@ -6,7 +6,7 @@ import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
-import { canClearData, canManageLabSettings, canManageUsers, canViewAudit, canWrite, roleLabel } from "../utils/roles";
+import { canManageCategories, canManageLabSettings, canManageUsers, canViewAudit, roleLabel } from "../utils/roles";
 import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
 
 const ROLES = [
@@ -18,7 +18,7 @@ const ROLES = [
 
 export default function Settings() {
   const { user } = useAuth();
-  const { showSuccess, showError, showAlert, confirmDelete, confirm } = useDialogs();
+  const { showSuccess, showError, showAlert, confirmDelete } = useDialogs();
   const [users, setUsers] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editing, setEditing] = useState(null);
@@ -32,7 +32,10 @@ export default function Settings() {
   const [alertSaving, setAlertSaving] = useState(false);
 
   const load = () => {
-    const requests = [api.get("/categories/").then((r) => setCategories(r.data))];
+    const requests = [];
+    if (canManageCategories(user)) {
+      requests.push(api.get("/categories/").then((r) => setCategories(r.data)));
+    }
     if (canManageUsers(user)) {
       requests.push(api.get("/users/").then((r) => setUsers(r.data)));
     }
@@ -79,22 +82,6 @@ export default function Settings() {
     const prefix = prompt("Code prefix (e.g. SP)", name.slice(0, 2).toUpperCase());
     await api.post("/categories/", { name, code_prefix: prefix || "OT", sort_order: categories.length });
     load();
-  };
-
-  const clearData = async () => {
-    const ok = await confirm({
-      title: "Clear all data",
-      message: "This will permanently delete ALL data and reset to seed. Are you sure?",
-      confirmText: "Clear data",
-      confirmClass: "modal-confirm-btn-reject",
-    });
-    if (!ok) return;
-    try {
-      await api.post("/settings/clear-data/");
-      showSuccess("Operational data cleared. Re-run seed_lab to restore demo data.");
-    } catch (err) {
-      showError(apiErrorMessage(err, "Could not clear data."));
-    }
   };
 
   const saveLabSettings = async () => {
@@ -153,7 +140,7 @@ export default function Settings() {
 
       <div className="card card-pad" style={{ marginBottom: 16 }}>
         <h3>Role Permissions</h3>
-        <div className="list-row"><strong>Admin</strong><span className="hint">Full lab access, secrets, and who may see each secret</span></div>
+        <div className="list-row"><strong>Admin</strong><span className="hint">Full lab access, secrets, categories, and who may see each secret</span></div>
         <div className="list-row"><strong>Staff</strong><span className="hint">Can mark secrets; sees them only if Admin grants access</span></div>
         <div className="list-row"><strong>Viewer</strong><span className="hint">Read-only; sees secrets only if Admin grants access</span></div>
         <div className="list-row"><strong>IT</strong><span className="hint">Secrets, audit logs, accounts, and expiry alert email</span></div>
@@ -234,18 +221,20 @@ export default function Settings() {
         </div>
       )}
 
-      <div className="card card-pad" style={{ marginBottom: 16 }}>
-        <div className="page-header" style={{ marginBottom: 8 }}>
-          <h3 style={{ margin: 0 }}>Categories</h3>
-          {canWrite(user) && <button className="btn btn-ghost" onClick={addCategory}><Icon name="plus" /> Add</button>}
-        </div>
-        {loading ? <Skeleton count={4} /> : categories.map((c) => (
-          <div className="list-row" key={c.id}>
-            <span>{c.name}</span>
-            <span className="badge badge-gold">{c.code_prefix}</span>
+      {canManageCategories(user) && (
+        <div className="card card-pad" style={{ marginBottom: 16 }}>
+          <div className="page-header" style={{ marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>Categories</h3>
+            <button className="btn btn-ghost" onClick={addCategory}><Icon name="plus" /> Add</button>
           </div>
-        ))}
-      </div>
+          {loading ? <Skeleton count={4} /> : categories.map((c) => (
+            <div className="list-row" key={c.id}>
+              <span>{c.name}</span>
+              <span className="badge badge-gold">{c.code_prefix}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card card-pad" style={{ marginBottom: 16 }}>
         <h3>Verdict Definitions</h3>
@@ -253,14 +242,6 @@ export default function Settings() {
         <div className="list-row"><strong>Not Suitable</strong><span className="hint">Failed tasting or cost criteria</span></div>
         <div className="list-row"><strong>Emergency Substitute</strong><span className="hint">Backup only — use if primary is unavailable</span></div>
       </div>
-
-      {canClearData(user) && (
-        <div className="card card-pad">
-          <h3>Clear All Data</h3>
-          <p className="hint">Permanently delete operational records. Users and categories are kept.</p>
-          <button className="btn btn-danger" onClick={clearData}><Icon name="trash" /> Clear All Data</button>
-        </div>
-      )}
 
       {editing && (
         <Modal

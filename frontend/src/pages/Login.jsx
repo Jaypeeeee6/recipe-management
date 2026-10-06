@@ -101,13 +101,6 @@ export default function Login() {
             <button type="submit" className="login-submit" disabled={loading}>
               {loading ? "Signing in…" : "Sign In"}
             </button>
-            <div className="login-demo">
-              Demo accounts:<br />
-              admin@lab.test / admin123<br />
-              staff@lab.test / staff123<br />
-              viewer@lab.test / viewer123<br />
-              it@lab.test / it123
-            </div>
           </form>
         </div>
       </div>
