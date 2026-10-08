@@ -33,13 +33,24 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  const acceptSsoTokens = async (access, refresh) => {
+    localStorage.setItem("lab_access", access);
+    localStorage.setItem("lab_refresh", refresh);
+    const { data } = await api.get("/auth/me/");
+    setUser(data);
+    return data;
+  };
+
   const logout = () => {
     localStorage.removeItem("lab_access");
     localStorage.removeItem("lab_refresh");
     setUser(null);
   };
 
-  const value = useMemo(() => ({ user, ready, login, logout }), [user, ready]);
+  const value = useMemo(
+    () => ({ user, ready, login, logout, acceptSsoTokens }),
+    [user, ready]
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

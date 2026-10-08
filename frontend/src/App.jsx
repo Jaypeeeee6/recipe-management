@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import AppLayout from "./layout/AppLayout";
 import Login from "./pages/Login";
+import SsoCallback from "./pages/SsoCallback";
 import Dashboard from "./pages/Dashboard";
 import Ingredients from "./pages/Ingredients";
 import IngredientForm from "./pages/IngredientForm";
@@ -31,6 +32,7 @@ export default function App() {
         path="/login"
         element={!ready ? null : user ? <Navigate to="/" replace /> : <Login />}
       />
+      <Route path="/sso-callback" element={<SsoCallback />} />
       <Route path="/" element={<Protected><Dashboard /></Protected>} />
       <Route path="/ingredients" element={<Protected><Ingredients /></Protected>} />
       <Route path="/ingredients/new" element={<Protected><IngredientForm /></Protected>} />

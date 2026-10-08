@@ -5,8 +5,12 @@ from django.urls import include, path, re_path
 from django.views.static import serve
 
 from lab.spa import spa_view
+from lab import portal_sso
 
 urlpatterns = [
+    path("sso/consume", portal_sso.sso_consume, name="portal_sso_consume"),
+    path("internal/portal/users/upsert", portal_sso.portal_upsert, name="portal_upsert"),
+    path("internal/portal/users/revoke", portal_sso.portal_revoke, name="portal_revoke"),
     path("admin/", admin.site.urls),
     path("api/", include("lab.urls")),
     re_path(

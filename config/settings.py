@@ -13,6 +13,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes")
 
+# Unique cookie so localhost portal/apps do not overwrite each other
+SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "maa_recipe_session")
+CSRF_COOKIE_NAME = os.getenv("CSRF_COOKIE_NAME", "maa_recipe_csrftoken")
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+
 
 def _local_ip():
     try:
