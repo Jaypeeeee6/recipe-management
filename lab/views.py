@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
@@ -40,8 +40,10 @@ from .permissions import (
     can_manage_users,
     can_see_secrets,
     can_view_audit,
+    can_view_calendar,
     can_write,
     is_admin,
+    is_it,
     user_role,
     visible_ingredients_q,
     visible_products_q,
@@ -377,11 +379,36 @@ class IngredientViewSet(viewsets.ModelViewSet):
             entity_id=None,
             summary=(
                 f"Imported ingredients from Excel: "
-                f"{result['created']} created, {len(result['errors'])} errors"
+                f"{result['created']} created, "
+                f"{result.get('suppliers_created', 0)} suppliers created, "
+                f"{len(result['errors'])} errors"
             ),
         )
         status_code = status.HTTP_200_OK if result["created"] or not result["errors"] else status.HTTP_400_BAD_REQUEST
         return Response(result, status=status_code)
+
+    @action(detail=False, methods=["post"], url_path="delete-all")
+    def delete_all(self, request):
+        """IT-only: permanently delete every ingredient."""
+        if not is_it(request.user):
+            return Response({"detail": "IT only."}, status=status.HTTP_403_FORBIDDEN)
+        confirm = (request.data.get("confirm") or "").strip()
+        if confirm != "DELETE":
+            return Response(
+                {"detail": 'Type DELETE in confirm to delete all ingredients.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Unfiltered: wipe all ingredients including secrets.
+        count = Ingredient.objects.count()
+        Ingredient.objects.all().delete()
+        log_action(
+            request=request,
+            action="delete_all",
+            entity_type="ingredient",
+            entity_id=None,
+            summary=f"Deleted all ingredients ({count})",
+        )
+        return Response({"deleted": count})
 
 
 class MealTrialViewSet(viewsets.ModelViewSet):
@@ -1081,6 +1108,107 @@ def dashboard_view(request):
             "recent_products": recent_products,
         }
     )
+
+
+@api_view(["GET"])
+def calendar_view(request):
+    """Lab calendar: meal trial dates + ingredient/trial expiry (Admin & Staff)."""
+    if not can_view_calendar(request.user):
+        return Response({"detail": "Admin and Staff only."}, status=status.HTTP_403_FORBIDDEN)
+
+    expire_overdue_trials()
+
+    date_from = request.query_params.get("from")
+    date_to = request.query_params.get("to")
+    if not date_from or not date_to:
+        return Response({"detail": "Query params 'from' and 'to' (YYYY-MM-DD) are required."}, status=400)
+    try:
+        start = date.fromisoformat(date_from)
+        end = date.fromisoformat(date_to)
+    except ValueError:
+        return Response({"detail": "Invalid date. Use YYYY-MM-DD."}, status=400)
+    if end < start:
+        return Response({"detail": "'to' must be on or after 'from'."}, status=400)
+    if (end - start).days > 400:
+        return Response({"detail": "Date range too large (max 400 days)."}, status=400)
+
+    types_raw = (request.query_params.get("types") or "trial,trial_expiry,ingredient_expiry").lower()
+    wanted = {t.strip() for t in types_raw.split(",") if t.strip()}
+
+    events = []
+
+    trial_visibility = visible_trials_q(request.user)
+    trials = MealTrial.objects.all()
+    if trial_visibility:
+        trials = trials.filter(trial_visibility).distinct()
+
+    if "trial" in wanted:
+        for t in trials.filter(trial_date__gte=start, trial_date__lte=end).only(
+            "id", "code", "title", "trial_date", "verdict", "is_secret"
+        ):
+            events.append(
+                {
+                    "id": f"trial-{t.id}-date",
+                    "type": "trial",
+                    "date": t.trial_date.isoformat(),
+                    "title": f"{t.code} {t.title}".strip(),
+                    "status": None,
+                    "entity_type": "trial",
+                    "entity_id": t.id,
+                    "is_secret": t.is_secret,
+                    "meta": {"verdict": t.verdict},
+                }
+            )
+
+    if "trial_expiry" in wanted:
+        # expires_at is DateTime — include trials whose local calendar day falls in range
+        tz = timezone.get_current_timezone()
+        range_start = timezone.make_aware(datetime.combine(start, datetime.min.time()), tz)
+        range_end = timezone.make_aware(datetime.combine(end, datetime.max.time()), tz)
+        for t in trials.filter(expires_at__isnull=False, expires_at__gte=range_start, expires_at__lte=range_end).only(
+            "id", "code", "title", "expires_at", "expiry_unit", "is_secret"
+        ):
+            local_day = timezone.localtime(t.expires_at).date()
+            events.append(
+                {
+                    "id": f"trial-{t.id}-expiry",
+                    "type": "trial_expiry",
+                    "date": local_day.isoformat(),
+                    "title": f"{t.code} shelf life ends",
+                    "status": t.expiry_status,
+                    "entity_type": "trial",
+                    "entity_id": t.id,
+                    "is_secret": t.is_secret,
+                    "meta": {"expires_at": t.expires_at.isoformat()},
+                }
+            )
+
+    if "ingredient_expiry" in wanted:
+        ing_qs = Ingredient.objects.filter(
+            expiry_date__isnull=False,
+            expiry_date__gte=start,
+            expiry_date__lte=end,
+        ).select_related("category")
+        ing_visibility = visible_ingredients_q(request.user)
+        if ing_visibility:
+            ing_qs = ing_qs.filter(ing_visibility).distinct()
+        for i in ing_qs:
+            events.append(
+                {
+                    "id": f"ingredient-{i.id}-expiry",
+                    "type": "ingredient_expiry",
+                    "date": i.expiry_date.isoformat(),
+                    "title": f"{i.code} {i.name}".strip(),
+                    "status": i.expiry_status,
+                    "entity_type": "ingredient",
+                    "entity_id": i.id,
+                    "is_secret": i.is_secret,
+                    "meta": {"category": i.category.name if i.category_id else ""},
+                }
+            )
+
+    events.sort(key=lambda e: (e["date"], e["type"], e["title"]))
+    return Response({"from": start.isoformat(), "to": end.isoformat(), "events": events})
 
 
 @api_view(["GET"])

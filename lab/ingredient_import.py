@@ -157,7 +157,7 @@ def build_ingredient_import_template(
         "Keep the header row on the Ingredients sheet exactly as shown.",
         "Use the dropdowns for Category, Supplier, Unit, Storage Conditions, Status, and Secret.",
         "Required: Name * and Category * (pick a category from the dropdown).",
-        "Supplier is optional — leave blank or pick from the dropdown.",
+        "Supplier is optional. New supplier names in the file are created automatically.",
         "Dates: YYYY-MM-DD (example 2026-12-31).",
         "Status: trial (default) or approved.",
         "Secret: yes/no (default no). Only Admin/IT can import secret=yes rows.",
@@ -222,6 +222,37 @@ def _as_int(value):
         raise ValueError(f"Invalid integer: {value!r}")
 
 
+def _as_shelf_life_days(value):
+    """Parse shelf life; free-text like '1 year' is ignored (blank) instead of failing the row."""
+    text = _as_str(value)
+    if not text:
+        return None
+    try:
+        return int(float(text.replace(",", "")))
+    except (TypeError, ValueError):
+        lower = text.lower()
+        # Light support for common phrases
+        if "year" in lower:
+            try:
+                num = float("".join(ch if ch.isdigit() or ch == "." else " " for ch in lower).split()[0])
+                return int(num * 365)
+            except (IndexError, ValueError):
+                return None
+        if "month" in lower:
+            try:
+                num = float("".join(ch if ch.isdigit() or ch == "." else " " for ch in lower).split()[0])
+                return int(num * 30)
+            except (IndexError, ValueError):
+                return None
+        if "day" in lower:
+            try:
+                num = float("".join(ch if ch.isdigit() or ch == "." else " " for ch in lower).split()[0])
+                return int(num)
+            except (IndexError, ValueError):
+                return None
+        return None
+
+
 def _as_date(value):
     if value in (None, ""):
         return None
@@ -238,52 +269,120 @@ def _as_date(value):
     raise ValueError(f"Invalid date (use YYYY-MM-DD): {value!r}")
 
 
+def _normalize_header_label(raw):
+    text = _as_str(raw).lower()
+    for ch in ("*", "(", ")", "/", "-", "_"):
+        text = text.replace(ch, " ")
+    return " ".join(text.split())
+
+
 def _normalize_headers(header_row):
     mapping = {}
+    # Exact aliases first, then keyword fallbacks for typo/edited headers.
     aliases = {
         "name": ("name", "name *", "ingredient", "ingredient name"),
         "category": ("category", "category *", "category name"),
         "supplier": ("supplier", "supplier name", "company"),
         "batch_number": ("batch number", "batch", "batch_number", "lot"),
-        "expiry_date": ("expiry date (yyyy-mm-dd)", "expiry date", "expiry", "expiry_date"),
-        "received_date": ("received date (yyyy-mm-dd)", "received date", "received", "received_date"),
-        "unit": ("unit",),
+        "expiry_date": (
+            "expiry date (yyyy-mm-dd)",
+            "expiry date",
+            "expiry",
+            "expiry_date",
+            "expiry date(yyy-mm-dd)",
+            "expiry date yyy mm dd",
+        ),
+        "received_date": (
+            "received date (yyyy-mm-dd)",
+            "received date",
+            "received",
+            "received_date",
+            "received date(yyy-mm-d)",
+            "received date yyy mm d",
+        ),
+        "unit": ("unit", "unite", "uom"),
         "quantity": ("quantity", "qty", "stock"),
         "par_level": ("par level", "par", "par_level"),
         "price_per_unit": ("price per unit (omr)", "price per unit", "price", "unit price", "price_per_unit"),
         "notes": ("notes", "note"),
         "storage_conditions": ("storage conditions", "storage", "storage_conditions"),
         "shelf_life_days": ("shelf life days", "shelf life", "shelf_life_days"),
-        "status": ("status (trial/approved)", "status"),
+        "status": ("status (trial/approved)", "status", "status tril approved trial"),
         "is_secret": ("secret (yes/no)", "secret", "is_secret", "is secret"),
+    }
+    keywords = {
+        "name": ("name",),
+        "category": ("category",),
+        "supplier": ("supplier",),
+        "batch_number": ("batch", "lot"),
+        "expiry_date": ("expiry",),
+        "received_date": ("received",),
+        "unit": ("unit", "unite"),
+        "quantity": ("quantity", "qty"),
+        "par_level": ("par",),
+        "price_per_unit": ("price",),
+        "notes": ("notes", "note"),
+        "storage_conditions": ("storage",),
+        "shelf_life_days": ("shelf",),
+        "status": ("status",),
+        "is_secret": ("secret",),
     }
     for idx, raw in enumerate(header_row):
         label = _as_str(raw).lower()
         if not label:
             continue
+        normalized = _normalize_header_label(raw)
+        matched = None
         for key, names in aliases.items():
-            if label in names and key not in mapping:
-                mapping[key] = idx
+            if label in names or normalized in {_normalize_header_label(n) for n in names}:
+                matched = key
                 break
+        if not matched:
+            tokens = normalized.split()
+            for key, words in keywords.items():
+                if any(w in tokens or normalized.startswith(w) for w in words):
+                    matched = key
+                    break
+        if matched and matched not in mapping:
+            mapping[matched] = idx
     return mapping
+
+
+def _resolve_status(value):
+    text = _as_str(value).lower()
+    if not text:
+        return "trial"
+    if "approv" in text:
+        return "approved"
+    if "trial" in text or "test" in text:
+        return "trial"
+    if text in ("trial", "approved", "testing"):
+        return text
+    raise ValueError("Status must be trial or approved.")
 
 
 def import_ingredients_from_excel(file_obj, *, allow_secret=False):
     """
     Import ingredients from an .xlsx file.
-    Returns dict: created, skipped, errors (list of {row, message}).
+    Returns dict: created, skipped, suppliers_created, errors.
     """
     wb = load_workbook(file_obj, data_only=True)
     ws = wb.active
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
-        return {"created": 0, "skipped": 0, "errors": [{"row": 1, "message": "File is empty."}]}
+        return {
+            "created": 0,
+            "skipped": 0,
+            "suppliers_created": 0,
+            "errors": [{"row": 1, "message": "File is empty."}],
+        }
 
     header_map = _normalize_headers(rows[0])
     if "name" not in header_map or "category" not in header_map:
         return {
             "created": 0,
             "skipped": 0,
+            "suppliers_created": 0,
             "errors": [
                 {
                     "row": 1,
@@ -297,6 +396,7 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
 
     created = 0
     skipped = 0
+    suppliers_created = 0
     errors = []
 
     for row_number, row in enumerate(rows[1:], start=2):
@@ -327,14 +427,17 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
             if "supplier" in header_map:
                 supplier_name = _as_str(_cell(row, header_map["supplier"]))
                 if supplier_name:
-                    supplier = suppliers.get(supplier_name.lower())
+                    key = supplier_name.lower()
+                    supplier = suppliers.get(key)
                     if not supplier:
-                        raise ValueError(f"Unknown supplier: {supplier_name!r}")
+                        # Auto-create suppliers named in the Excel so bulk import can finish.
+                        supplier = Supplier.objects.create(company_name=supplier_name[:200])
+                        suppliers[key] = supplier
+                        suppliers_created += 1
 
-            status_raw = _as_str(_cell(row, header_map["status"])) if "status" in header_map else "trial"
-            status_key = status_raw.lower() or "trial"
-            if status_key not in ("trial", "approved", "testing"):
-                raise ValueError("Status must be trial or approved.")
+            status_key = _resolve_status(
+                _cell(row, header_map["status"]) if "status" in header_map else "trial"
+            )
             is_trial = status_key in ("trial", "testing")
             trial_status = (
                 TrialProductStatus.TESTING if is_trial else TrialProductStatus.APPROVED
@@ -371,7 +474,7 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
                 price_per_unit=price,
                 notes=_as_str(col("notes")),
                 storage_conditions=_as_str(col("storage_conditions")),
-                shelf_life_days=_as_int(col("shelf_life_days")),
+                shelf_life_days=_as_shelf_life_days(col("shelf_life_days")),
                 is_secret=is_secret,
                 is_trial=is_trial,
                 trial_status=trial_status,
@@ -386,4 +489,9 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
         except Exception as exc:  # noqa: BLE001 — collect per-row errors
             errors.append({"row": row_number, "message": str(exc)})
 
-    return {"created": created, "skipped": skipped, "errors": errors}
+    return {
+        "created": created,
+        "skipped": skipped,
+        "suppliers_created": suppliers_created,
+        "errors": errors,
+    }

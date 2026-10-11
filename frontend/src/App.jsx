@@ -11,15 +11,29 @@ import { TrialDetail, TrialForm, TrialList } from "./pages/Trials";
 import TrialCompare from "./pages/TrialCompare";
 import { ProductArchives, ProductForm, ProductList } from "./pages/Products";
 import Reports from "./pages/Reports";
+import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 import AuditLogs from "./pages/AuditLogs";
 import Committee from "./pages/Committee";
+import { canViewCalendar } from "./utils/roles";
 
 function Protected({ children }) {
   const { user, ready } = useAuth();
   if (!ready) return null;
   if (!user) return <Navigate to="/login" replace />;
   return <AppLayout>{children}</AppLayout>;
+}
+
+function CalendarRoute() {
+  const { user, ready } = useAuth();
+  if (!ready) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canViewCalendar(user)) return <Navigate to="/" replace />;
+  return (
+    <AppLayout>
+      <Calendar />
+    </AppLayout>
+  );
 }
 
 export default function App() {
@@ -50,6 +64,7 @@ export default function App() {
       <Route path="/products/new" element={<Protected><ProductForm /></Protected>} />
       <Route path="/products/:id" element={<Protected><ProductForm /></Protected>} />
       <Route path="/reports" element={<Protected><Reports /></Protected>} />
+      <Route path="/calendar" element={<CalendarRoute />} />
       <Route path="/settings" element={<Protected><Settings /></Protected>} />
       <Route path="/audit-logs" element={<Protected><AuditLogs /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />

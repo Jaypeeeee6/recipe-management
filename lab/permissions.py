@@ -69,6 +69,11 @@ def can_write(user):
     return user_role(user) in (Role.ADMIN, Role.STAFF, Role.IT)
 
 
+def can_view_calendar(user):
+    """Lab calendar (trials + expiry board) for Admin and Staff."""
+    return user_role(user) in (Role.ADMIN, Role.STAFF)
+
+
 def can_manage_users(user):
     """Only IT can register and manage user accounts."""
     return is_it(user)

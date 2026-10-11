@@ -25,6 +25,7 @@ from .permissions import (
     can_manage_users,
     can_see_secrets,
     can_view_audit,
+    can_view_calendar,
     can_write,
 )
 from .utils import (
@@ -56,6 +57,7 @@ class UserSerializer(serializers.ModelSerializer):
             "can_manage_lab_settings": can_manage_lab_settings(obj),
             "can_view_audit": can_view_audit(obj),
             "can_manage_categories": can_manage_categories(obj),
+            "can_view_calendar": can_view_calendar(obj),
         }
 
 

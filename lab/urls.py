@@ -17,6 +17,7 @@ urlpatterns = [
     path("auth/refresh/", TokenRefreshView.as_view()),
     path("auth/me/", views.me_view),
     path("dashboard/", views.dashboard_view),
+    path("calendar/", views.calendar_view),
     path("reports/", views.reports_view),
     path("audit-logs/", views.audit_logs_view),
     path("settings/lab/", views.lab_settings_view),

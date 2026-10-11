@@ -49,3 +49,11 @@ export function canViewAudit(user) {
 export function canManageCategories(user) {
   return user?.role === "admin" || !!perms(user).can_manage_categories;
 }
+
+export function canViewCalendar(user) {
+  return (
+    user?.role === "admin"
+    || user?.role === "staff"
+    || !!perms(user).can_view_calendar
+  );
+}

@@ -27,6 +27,7 @@ const NAV = [
   { to: "/ingredients", label: "Ingredients", d: "M12 3v18M5 8h14M5 16h14" },
   { to: "/suppliers", label: "Suppliers", d: "M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6" },
   { to: "/trials", label: "Meal Trials", d: "M4 19h16M7 19V8m5 11V5m5 14v-7" },
+  { to: "/calendar", label: "Calendar", d: "M8 2v3M16 2v3M4 9h16M6 5h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2z", roles: ["admin", "staff"] },
   { to: "/products", label: "Products", d: "M12 17.3l6.18 3.7-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" },
   { to: "/reports", label: "Reports", d: "M4 19V5h16v14H4zm4-4h8M8 11h8" },
   { to: "/audit-logs", label: "Audit Logs", d: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4", roles: ["it"] },

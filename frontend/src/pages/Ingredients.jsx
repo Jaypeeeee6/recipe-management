@@ -9,7 +9,7 @@ import StatusBadge from "../components/StatusBadge";
 import SecretBadge from "../components/SecretBadge";
 import { formatDate, formatMoney } from "../utils/format";
 import { exportIngredientsPdf } from "../utils/ingredientExport";
-import { canWrite } from "../utils/roles";
+import { canManageLabSettings, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
 
@@ -29,7 +29,7 @@ function normalizeTab(value) {
 
 export default function Ingredients() {
   const { user } = useAuth();
-  const { showSuccess, showError, confirmDelete } = useDialogs();
+  const { showSuccess, showError, confirm, confirmDelete } = useDialogs();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -252,6 +252,28 @@ export default function Ingredients() {
     }
   };
 
+  const deleteAllIngredients = async () => {
+    const ok = await confirmDelete(
+      "This will permanently delete ALL ingredients (including secret and trial). Recipe lines will lose their linked ingredient. This cannot be undone.",
+      "Delete all ingredients?"
+    );
+    if (!ok) return;
+    const confirmed = await confirm({
+      title: "Final confirmation",
+      message: 'Click "Delete all" to permanently remove every ingredient.',
+      confirmText: "Delete all",
+      confirmClass: "modal-confirm-btn-reject",
+    });
+    if (!confirmed) return;
+    try {
+      const { data } = await api.post("/ingredients/delete-all/", { confirm: "DELETE" });
+      showSuccess(`Deleted ${data.deleted} ingredient(s).`);
+      load();
+    } catch (err) {
+      showError(apiErrorMessage(err, "Could not delete all ingredients."));
+    }
+  };
+
   const downloadImportTemplate = async () => {
     try {
       const { data } = await api.get("/ingredients/import-template/", { responseType: "blob" });
@@ -280,11 +302,15 @@ export default function Ingredients() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const errCount = data.errors?.length || 0;
+      const suppliersCreated = data.suppliers_created || 0;
       if (data.created) {
+        const supplierNote = suppliersCreated
+          ? ` ${suppliersCreated} new supplier(s) created.`
+          : "";
         showSuccess(
           errCount
-            ? `Imported ${data.created} ingredient(s). ${errCount} row(s) had errors.`
-            : `Imported ${data.created} ingredient(s).`
+            ? `Imported ${data.created} ingredient(s).${supplierNote} ${errCount} row(s) had errors.`
+            : `Imported ${data.created} ingredient(s).${supplierNote}`
         );
         load();
       } else if (errCount) {
@@ -326,6 +352,18 @@ export default function Ingredients() {
             <Icon name="download" />
             Export PDF
           </button>
+          {canManageLabSettings(user) && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={deleteAllIngredients}
+              disabled={loading || importing}
+              style={{ color: "var(--danger, #b42318)" }}
+            >
+              <Icon name="trash" />
+              Delete all
+            </button>
+          )}
           {canWrite(user) && (
             <>
               <button
