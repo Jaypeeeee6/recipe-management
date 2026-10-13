@@ -87,6 +87,25 @@ function compareIngredients(a, b, sort) {
   return 0;
 }
 
+function groupIngredientsByCategory(list, categories) {
+  const map = new Map();
+  for (const item of list) {
+    const key = item.category_name || "Uncategorized";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  const order = categories.map((c) => c.name);
+  const names = [...map.keys()].sort((a, b) => {
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  return names.map((name) => ({ name, items: map.get(name) }));
+}
+
 export default function Ingredients() {
   const { user } = useAuth();
   const { showSuccess, showError, confirm, confirmDelete } = useDialogs();
@@ -201,24 +220,15 @@ export default function Ingredients() {
     `${tab}|${category}|${supplier}|${q}|${sort}`
   );
 
-  const grouped = useMemo(() => {
-    const map = new Map();
-    for (const item of pageItems) {
-      const key = item.category_name || "Uncategorized";
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(item);
-    }
-    const order = categories.map((c) => c.name);
-    const names = [...map.keys()].sort((a, b) => {
-      const ia = order.indexOf(a);
-      const ib = order.indexOf(b);
-      if (ia === -1 && ib === -1) return a.localeCompare(b);
-      if (ia === -1) return 1;
-      if (ib === -1) return -1;
-      return ia - ib;
-    });
-    return names.map((name) => ({ name, items: map.get(name) }));
-  }, [pageItems, categories]);
+  const grouped = useMemo(
+    () => groupIngredientsByCategory(pageItems, categories),
+    [pageItems, categories]
+  );
+
+  const exportGrouped = useMemo(
+    () => groupIngredientsByCategory(filtered, categories),
+    [filtered, categories]
+  );
 
   const renderActions = (i) => (
     <td className="row-actions">
@@ -287,22 +297,26 @@ export default function Ingredients() {
     }
   };
 
-  const exportPdf = () => {
+  const exportPdf = async () => {
     const categoryLabel = category
       ? categories.find((c) => String(c.id) === String(category))?.name
       : "";
     const supplierLabel = supplier
       ? suppliers.find((s) => String(s.id) === String(supplier))?.company_name
       : "";
+    const sortLabel = sort
+      ? SORT_OPTIONS.find((o) => o.value === sort)?.label || ""
+      : "";
     try {
-      exportIngredientsPdf({
+      await exportIngredientsPdf({
         items: filtered,
-        grouped,
+        grouped: exportGrouped,
         filters: {
           tabLabel: `${TAB_LABELS[tab] || tab} Ingredients`,
           search: q.trim(),
           categoryLabel,
           supplierLabel,
+          sortLabel,
         },
       });
     } catch (err) {
