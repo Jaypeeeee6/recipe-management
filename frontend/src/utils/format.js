@@ -28,10 +28,26 @@ export function sanitizeOmrDecimalInput(raw) {
   return value;
 }
 
-/** Digits only — for stock quantity and other whole-number fields. */
+/** Digits only — for stock quantity and other whole-number fields while typing. */
 export function sanitizeIntegerInput(raw) {
   if (raw == null) return "";
   return String(raw).replace(/[^0-9]/g, "");
+}
+
+/** Load API quantity into a form field as a whole number (e.g. "10.000" → "10"). */
+export function integerFieldValue(value) {
+  if (value == null || value === "") return "";
+  const n = Number(String(value).replace(/,/g, ""));
+  if (!Number.isFinite(n)) return "";
+  return String(Math.trunc(n));
+}
+
+/** Display stock quantity without decimal places. */
+export function formatWholeNumber(value) {
+  if (value == null || value === "") return "—";
+  const n = Number(String(value).replace(/,/g, ""));
+  if (!Number.isFinite(n)) return String(value);
+  return String(Math.trunc(n));
 }
 
 /** Preserve API decimal strings for form fields without rounding 1.200 down to 1.2. */

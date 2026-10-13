@@ -16,7 +16,7 @@ import Stars from "../components/Stars";
 import Modal from "../components/Modal";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
-import { formatDate, formatDateTime } from "../utils/format";
+import { formatDate, formatDateTime, formatWholeNumber } from "../utils/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -439,7 +439,7 @@ export default function Dashboard() {
                 <div className="list-row" key={i.id}>
                   <div>
                     <strong>{i.name}</strong>
-                    <div className="hint">{i.code} · {i.quantity} {i.unit} / par {i.par_level}</div>
+                    <div className="hint">{i.code} · {formatWholeNumber(i.quantity)} {i.unit} / par {i.par_level}</div>
                   </div>
                   <span className="badge badge-low">Low Stock</span>
                 </div>

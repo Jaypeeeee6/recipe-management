@@ -8,7 +8,7 @@ import Modal from "../components/Modal";
 import { useReturnTo } from "../components/Pagination";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import StatusBadge from "../components/StatusBadge";
-import { formatMoney, omrFieldValue, sanitizeIntegerInput, sanitizeOmrDecimalInput } from "../utils/format";
+import { formatMoney, integerFieldValue, omrFieldValue, sanitizeIntegerInput, sanitizeOmrDecimalInput } from "../utils/format";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
@@ -78,7 +78,7 @@ export default function IngredientForm() {
           shelf_life_days: d.shelf_life_days || "",
           alternative_ids: d.alternative_ids || [],
           secret_viewer_ids: d.secret_viewer_ids || [],
-          quantity: sanitizeIntegerInput(d.quantity),
+          quantity: integerFieldValue(d.quantity),
           price_per_unit: omrFieldValue(d.price_per_unit),
         });
         setHistory(d.price_history || []);
