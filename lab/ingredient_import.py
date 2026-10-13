@@ -456,7 +456,9 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
                     return default
                 return _cell(row, header_map[key])
 
-            quantity = _as_decimal(col("quantity"), Decimal("0"))
+            quantity = _as_int(col("quantity")) or 0
+            if quantity < 0:
+                raise ValueError("Quantity must be a whole number ≥ 0.")
             par_level = _as_decimal(col("par_level"), Decimal("0"))
             price = _as_decimal(col("price_per_unit"), Decimal("0"))
             unit = _as_str(col("unit")) or "kg"

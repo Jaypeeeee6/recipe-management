@@ -8,7 +8,7 @@ import Modal from "../components/Modal";
 import { useReturnTo } from "../components/Pagination";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import StatusBadge from "../components/StatusBadge";
-import { formatMoney, omrFieldValue, sanitizeOmrDecimalInput } from "../utils/format";
+import { formatMoney, omrFieldValue, sanitizeIntegerInput, sanitizeOmrDecimalInput } from "../utils/format";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
@@ -78,7 +78,7 @@ export default function IngredientForm() {
           shelf_life_days: d.shelf_life_days || "",
           alternative_ids: d.alternative_ids || [],
           secret_viewer_ids: d.secret_viewer_ids || [],
-          quantity: omrFieldValue(d.quantity),
+          quantity: sanitizeIntegerInput(d.quantity),
           price_per_unit: omrFieldValue(d.price_per_unit),
         });
         setHistory(d.price_history || []);
@@ -128,6 +128,7 @@ export default function IngredientForm() {
       supplier: form.supplier ? Number(form.supplier) : null,
       expiry_date: null,
       received_date: form.received_date || null,
+      quantity: form.quantity === "" ? 0 : Number(form.quantity),
       shelf_life_days: form.shelf_life_days === "" ? null : Number(form.shelf_life_days),
       alternative_ids: form.alternative_ids,
       secret_viewer_ids: form.is_secret ? (form.secret_viewer_ids || []) : [],
@@ -408,10 +409,10 @@ export default function IngredientForm() {
             <input
               className="input"
               type="text"
-              inputMode="decimal"
+              inputMode="numeric"
               autoComplete="off"
               value={form.quantity}
-              onChange={(e) => set("quantity", sanitizeOmrDecimalInput(e.target.value))}
+              onChange={(e) => set("quantity", sanitizeIntegerInput(e.target.value))}
             />
           </div>
           <div className="field">

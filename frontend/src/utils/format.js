@@ -28,6 +28,12 @@ export function sanitizeOmrDecimalInput(raw) {
   return value;
 }
 
+/** Digits only — for stock quantity and other whole-number fields. */
+export function sanitizeIntegerInput(raw) {
+  if (raw == null) return "";
+  return String(raw).replace(/[^0-9]/g, "");
+}
+
 /** Preserve API decimal strings for form fields without rounding 1.200 down to 1.2. */
 export function omrFieldValue(value) {
   if (value == null || value === "") return "";

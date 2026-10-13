@@ -317,7 +317,7 @@ class Command(BaseCommand):
                     "expiry_date": d(row["expiry"]),
                     "received_date": d(row["received"]),
                     "unit": row["unit"],
-                    "quantity": Decimal(str(row["qty"])),
+                    "quantity": int(row["qty"]),
                     "par_level": Decimal(str(row["par"])),
                     "price_per_unit": Decimal(row["price"]),
                     "notes": row["notes"],
