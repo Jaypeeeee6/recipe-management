@@ -733,7 +733,7 @@ table.data td {
 table.data tr:hover td { background: #faf8f3; }
 .table-wrap { overflow-x: auto; overflow-y: visible; }
 
-.pagination {
+.table-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -742,15 +742,62 @@ table.data tr:hover td { background: #faf8f3; }
   padding: 12px 16px;
   border-top: 1px solid var(--border);
 }
-.pagination-meta {
+.table-footer-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.table-footer-left .show-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
-  color: var(--muted, #6b7280);
+  color: #374151;
+}
+.table-footer-left .page-size {
+  height: 34px;
+  padding: 0 2rem 0 10px;
+  border-radius: 8px;
+  border: 1px solid #e6e6e6;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 16px 16px;
+  color: var(--text);
+  font-size: 13px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+}
+.table-footer-left .page-size::-ms-expand {
+  display: none;
+}
+.table-footer-left .entries-info {
+  color: #6b7280;
+  font-size: 13px;
+}
+.table-footer-right {
+  display: flex;
+  align-items: center;
 }
 .pagination-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+}
+/* Back-compat alias used by older markup */
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
 }
 .pagination-btn {
   min-width: 34px;

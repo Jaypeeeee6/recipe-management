@@ -36,8 +36,8 @@ export default function AuditLogs() {
   }, [user]);
 
   const {
-    page, setPage, pageItems, total, totalPages, from, to,
-  } = usePagination(items, 15, `${q}|${action}|${items.length}`);
+    page, setPage, pageSize, setPageSize, pageItems, total, totalPages, from, to,
+  } = usePagination(items, 10, `${q}|${action}|${items.length}`);
 
   if (!canViewAudit(user)) {
     return <Navigate to="/" replace />;
@@ -115,7 +115,16 @@ export default function AuditLogs() {
               </tbody>
             </table>
           </div>
-          <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+            total={total}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
           </>
         )}
       </div>

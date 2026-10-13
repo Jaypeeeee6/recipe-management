@@ -213,7 +213,7 @@ export default function Ingredients() {
   }, [items, sort]);
 
   const {
-    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+    page, setPage, pageSize, setPageSize, pageItems, total, totalPages, from, to, listReturnTo,
   } = usePersistedListPage(
     filtered,
     10,
@@ -663,7 +663,16 @@ export default function Ingredients() {
         ))}
 
         {filtered.length > 0 && (
-          <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+            total={total}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
         )}
       </div>
 

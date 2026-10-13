@@ -101,7 +101,7 @@ export function ProductList() {
   };
 
   const {
-    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+    page, setPage, pageSize, setPageSize, pageItems, total, totalPages, from, to, listReturnTo,
   } = usePersistedListPage(items, 10, tab);
 
   return (
@@ -195,7 +195,16 @@ export function ProductList() {
             </tbody>
           </table>
         </div>
-        <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onChange={setPage}
+          total={total}
+          from={from}
+          to={to}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
+        />
         </>
         )}
       </div>
@@ -226,7 +235,7 @@ export function ProductArchives() {
   }, [items, q, filter]);
 
   const {
-    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+    page, setPage, pageSize, setPageSize, pageItems, total, totalPages, from, to, listReturnTo,
   } = usePersistedListPage(filtered, 10, `${q}|${filter}`);
 
   return (
@@ -325,7 +334,16 @@ export function ProductArchives() {
             </tbody>
           </table>
         </div>
-        <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onChange={setPage}
+          total={total}
+          from={from}
+          to={to}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
+        />
           </>
         )}
       </div>

@@ -28,7 +28,7 @@ export default function Reports() {
 
   const rows = report?.rows || [];
   const {
-    page, setPage, pageItems, total, totalPages, from, to,
+    page, setPage, pageSize, setPageSize, pageItems, total, totalPages, from, to,
   } = usePagination(rows, 10, String(reportKey));
 
   const exportCSV = () => {
@@ -139,7 +139,16 @@ export default function Reports() {
                     </tbody>
                   </table>
                 </div>
-                <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onChange={setPage}
+                  total={total}
+                  from={from}
+                  to={to}
+                  pageSize={pageSize}
+                  onPageSizeChange={setPageSize}
+                />
               </>
             )}
           </div>

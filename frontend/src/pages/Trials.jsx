@@ -297,7 +297,7 @@ export function TrialList() {
     `${t.title} ${t.code} ${t.conducted_by}`.toLowerCase().includes(q.toLowerCase())
   );
   const {
-    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+    page, setPage, pageSize, setPageSize, pageItems, total, totalPages, from, to, listReturnTo,
   } = usePersistedListPage(filtered, 10, `${tab}|${q}`);
 
   // Jump to the page that contains the highlighted trial.
@@ -305,9 +305,9 @@ export function TrialList() {
     if (!flashId || loading) return;
     const idx = filtered.findIndex((t) => String(t.id) === String(flashId));
     if (idx < 0) return;
-    const targetPage = Math.floor(idx / 10) + 1;
+    const targetPage = Math.floor(idx / pageSize) + 1;
     if (targetPage !== page) setPage(targetPage);
-  }, [flashId, loading, filtered, page, setPage]);
+  }, [flashId, loading, filtered, page, pageSize, setPage]);
 
   useEffect(() => {
     if (!flashId || loading || flashPhase !== "on") return undefined;
@@ -534,7 +534,16 @@ export function TrialList() {
             </tbody>
           </table>
         </div>
-        <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onChange={setPage}
+          total={total}
+          from={from}
+          to={to}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
+        />
           </>
         )}
       </div>

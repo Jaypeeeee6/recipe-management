@@ -247,6 +247,8 @@ export default function Dashboard() {
   const {
     page: expiringPage,
     setPage: setExpiringPage,
+    pageSize: expiringPageSize,
+    setPageSize: setExpiringPageSize,
     pageItems: expiringPageItems,
     total: expiringTotal,
     totalPages: expiringTotalPages,
@@ -568,6 +570,8 @@ export default function Dashboard() {
               total={expiringTotal}
               from={expiringFrom}
               to={expiringTo}
+              pageSize={expiringPageSize}
+              onPageSizeChange={setExpiringPageSize}
             />
           )}
         </Modal>

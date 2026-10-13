@@ -123,7 +123,7 @@ export default function Settings() {
   };
 
   const {
-    page, setPage, pageItems, total, totalPages, from, to,
+    page, setPage, pageSize, setPageSize, pageItems, total, totalPages, from, to,
   } = usePagination(users, 10, String(users.length));
 
   return (
@@ -216,7 +216,16 @@ export default function Settings() {
             </tbody>
           </table>
           {!loading && (
-            <Pagination page={page} totalPages={totalPages} onChange={setPage} total={total} from={from} to={to} />
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onChange={setPage}
+              total={total}
+              from={from}
+              to={to}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </div>
       )}
