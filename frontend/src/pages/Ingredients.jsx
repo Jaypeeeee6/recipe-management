@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Modal from "../components/Modal";
 import Icon, { IconAction } from "../components/Icon";
-import Pagination, { usePagination } from "../components/Pagination";
+import Pagination, { usePersistedListPage } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import SecretBadge from "../components/SecretBadge";
@@ -125,8 +125,8 @@ export default function Ingredients() {
   const filtered = useMemo(() => items, [items]);
 
   const {
-    page, setPage, pageItems, total, totalPages, from, to,
-  } = usePagination(
+    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+  } = usePersistedListPage(
     filtered,
     10,
     `${tab}|${category}|${supplier}|${q}`
@@ -387,7 +387,7 @@ export default function Ingredients() {
                 hidden
                 onChange={onImportExcel}
               />
-              <Link className="btn btn-add" to="/ingredients/new">
+              <Link className="btn btn-add" to="/ingredients/new" state={{ returnTo: listReturnTo }}>
                 <Icon name="plus" />
                 {tab === "pending" || tab === "rejected" ? "Add Trial Product" : "Add Ingredient"}
               </Link>
@@ -482,7 +482,7 @@ export default function Ingredients() {
                       <td>{i.code}</td>
                       <td>
                         {i.photo ? <OpenableThumb src={i.photo} alt={i.name || ""} /> : null}
-                        <Link to={`/ingredients/${i.id}`}>{i.name}</Link>
+                        <Link to={`/ingredients/${i.id}`} state={{ returnTo: listReturnTo }}>{i.name}</Link>
                         {i.is_secret && <SecretBadge className="badge-secret-inline" />}
                         {i.is_low_stock && <span className="badge badge-low" style={{ marginLeft: 6 }}>Low Stock</span>}
                       </td>
@@ -549,7 +549,7 @@ export default function Ingredients() {
                   <div style={{ margin: "8px 0" }}>
                     <StatusBadge value={i.is_trial ? i.trial_status : "approved"} />
                   </div>
-                  <Link to={`/ingredients/${i.id}`}>View details</Link>
+                  <Link to={`/ingredients/${i.id}`} state={{ returnTo: listReturnTo }}>View details</Link>
                   {renderCardActions(i)}
                 </div>
               ))}

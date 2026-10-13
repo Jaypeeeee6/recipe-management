@@ -125,7 +125,7 @@ function ActionTooltip({ title, anchor }) {
   );
 }
 
-export function IconAction({ name, title, to, onClick, tone }) {
+export function IconAction({ name, title, to, state, onClick, tone }) {
   const ref = useRef(null);
   const [tip, setTip] = useState(false);
   const className = `btn-icon${tone ? ` btn-icon-${tone}` : ""}`;
@@ -141,7 +141,7 @@ export function IconAction({ name, title, to, onClick, tone }) {
   if (to) {
     return (
       <>
-        <Link className={className} to={to} aria-label={title} {...tipEvents}>
+        <Link className={className} to={to} state={state} aria-label={title} {...tipEvents}>
           {content}
         </Link>
         {tooltip}

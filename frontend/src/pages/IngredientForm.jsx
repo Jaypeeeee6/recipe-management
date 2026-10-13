@@ -4,6 +4,7 @@ import api from "../api/client";
 import Icon from "../components/Icon";
 import Skeleton from "../components/Skeleton";
 import Modal from "../components/Modal";
+import { useReturnTo } from "../components/Pagination";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import StatusBadge from "../components/StatusBadge";
 import { formatMoney, omrFieldValue, sanitizeOmrDecimalInput } from "../utils/format";
@@ -37,6 +38,7 @@ export default function IngredientForm() {
   const { id } = useParams();
   const isNew = !id || id === "new";
   const navigate = useNavigate();
+  const ingredientsBackTo = useReturnTo("/ingredients");
   const { user } = useAuth();
   const { showError, showSuccess } = useDialogs();
   const [form, setForm] = useState(empty);
@@ -267,14 +269,14 @@ export default function IngredientForm() {
   return (
     <div>
       <div className="page-breadcrumb hint">
-        <Link to="/ingredients">Ingredients</Link> / {isNew ? "Add" : form.name}
+        <Link to={ingredientsBackTo}>Ingredients</Link> / {isNew ? "Add" : form.name}
       </div>
       <div className="page-header">
         <div>
           <h1>{isNew ? "Add Ingredient" : "Edit Ingredient"}</h1>
         </div>
         <div className="page-header-actions">
-          <Link className="btn btn-back" to="/ingredients">
+          <Link className="btn btn-back" to={ingredientsBackTo}>
             <Icon name="back" />
             Back
           </Link>

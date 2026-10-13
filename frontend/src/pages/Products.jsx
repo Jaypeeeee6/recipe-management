@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
-import Pagination, { usePagination } from "../components/Pagination";
+import Pagination, { usePersistedListPage, useReturnTo } from "../components/Pagination";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import OpenableThumb from "../components/OpenableThumb";
 import Skeleton from "../components/Skeleton";
@@ -100,8 +100,8 @@ export function ProductList() {
   };
 
   const {
-    page, setPage, pageItems, total, totalPages, from, to,
-  } = usePagination(items, 10, tab);
+    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+  } = usePersistedListPage(items, 10, tab);
 
   return (
     <div>
@@ -114,7 +114,7 @@ export function ProductList() {
               : "Approved meal trials sync here automatically, or add products manually"}
           </p>
         </div>
-        <Link className="btn btn-add" to="/products/new"><Icon name="plus" /> Add Product</Link>
+        <Link className="btn btn-add" to="/products/new" state={{ returnTo: listReturnTo }}><Icon name="plus" /> Add Product</Link>
       </div>
 
       <ProductTabs />
@@ -156,7 +156,7 @@ export function ProductList() {
                     {p.photo ? (
                       <OpenableThumb src={p.photo} alt={p.product_name || ""} />
                     ) : null}
-                    <Link to={`/products/${p.id}`}>{p.product_name}</Link>
+                    <Link to={`/products/${p.id}`} state={{ returnTo: listReturnTo }}>{p.product_name}</Link>
                     {p.is_secret && <SecretBadge className="badge-secret-inline" />}
                   </td>
                   <td className="col-price">{p.selling_price != null ? formatMoney(p.selling_price) : "—"}</td>
@@ -165,7 +165,7 @@ export function ProductList() {
                       items={p.trial_titles}
                       renderItem={(t) => (
                         <div key={t.id} className="expandable-list-item">
-                          <Link to={`/trials/${t.id}`}>{t.code}</Link> — {t.title}
+                          <Link to={`/trials/${t.id}`} state={{ returnTo: listReturnTo }}>{t.code}</Link> — {t.title}
                         </div>
                       )}
                     />
@@ -175,7 +175,7 @@ export function ProductList() {
                       items={p.ingredient_titles}
                       renderItem={(i) => (
                         <div key={i.id} className="expandable-list-item">
-                          <Link to={`/ingredients/${i.id}`}>{i.code}</Link> — {i.name}
+                          <Link to={`/ingredients/${i.id}`} state={{ returnTo: listReturnTo }}>{i.code}</Link> — {i.name}
                         </div>
                       )}
                     />
@@ -225,8 +225,8 @@ export function ProductArchives() {
   }, [items, q, filter]);
 
   const {
-    page, setPage, pageItems, total, totalPages, from, to,
-  } = usePagination(filtered, 10, `${q}|${filter}`);
+    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+  } = usePersistedListPage(filtered, 10, `${q}|${filter}`);
 
   return (
     <div>
@@ -282,7 +282,7 @@ export function ProductArchives() {
                 <tr key={t.id}>
                   <td>{t.code}</td>
                   <td>
-                    <Link to={`/trials/${t.id}`}>{t.title}</Link>
+                    <Link to={`/trials/${t.id}`} state={{ returnTo: listReturnTo }}>{t.title}</Link>
                     {t.is_secret && <SecretBadge className="badge-secret-inline" />}
                     <div className="hint">{t.conducted_by || "—"}</div>
                   </td>
@@ -336,6 +336,7 @@ export function ProductForm() {
   const { id } = useParams();
   const isNew = !id || id === "new";
   const navigate = useNavigate();
+  const productsBackTo = useReturnTo("/products");
   const { user } = useAuth();
   const { showError, showSuccess } = useDialogs();
   const [form, setForm] = useState({
@@ -493,7 +494,7 @@ export function ProductForm() {
               <Icon name="download" /> Export PDF
             </button>
           )}
-          <Link className="btn btn-back" to="/products">
+          <Link className="btn btn-back" to={productsBackTo}>
             <Icon name="back" />
             Back
           </Link>
@@ -600,7 +601,13 @@ export function ProductForm() {
                       <td>{t.code || "—"}</td>
                       <td>{t.title || "—"}</td>
                       <td className="row-actions">
-                        <Link className="btn btn-ghost" to={`/trials/${t.id}`}>View</Link>
+                        <Link
+                          className="btn btn-ghost"
+                          to={`/trials/${t.id}`}
+                          state={{ returnTo: isNew ? productsBackTo : `/products/${id}` }}
+                        >
+                          View
+                        </Link>
                       </td>
                     </tr>
                   ))}

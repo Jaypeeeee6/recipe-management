@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Icon from "../components/Icon";
+import { useReturnTo } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import Stars from "../components/Stars";
@@ -84,6 +85,7 @@ const METRICS = [
 ];
 
 export default function TrialCompare() {
+  const trialsBackTo = useReturnTo("/trials");
   const [params, setSearchParams] = useSearchParams();
   const [catalog, setCatalog] = useState([]);
   const [selected, setSelected] = useState(() =>
@@ -172,11 +174,11 @@ export default function TrialCompare() {
     <div>
       <div className="page-header">
         <div>
-          <div className="hint"><Link to="/trials">Meal Trials</Link> / Compare</div>
+          <div className="hint"><Link to={trialsBackTo}>Meal Trials</Link> / Compare</div>
           <h1>Compare Trials</h1>
           <p>Pick 2–{MAX_COMPARE} trials to see which performs better on each metric</p>
         </div>
-        <Link className="btn btn-back" to="/trials">
+        <Link className="btn btn-back" to={trialsBackTo}>
           <Icon name="back" />
           Back
         </Link>

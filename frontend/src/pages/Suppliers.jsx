@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
-import Pagination, { usePagination } from "../components/Pagination";
+import Pagination, { usePersistedListPage, useReturnTo } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import Stars from "../components/Stars";
 import { useDialogs } from "../dialogs/DialogsContext";
@@ -32,8 +32,8 @@ export function SupplierList() {
     `${s.company_name} ${s.contact_person} ${s.city}`.toLowerCase().includes(q.toLowerCase())
   );
   const {
-    page, setPage, pageItems, total, totalPages, from, to,
-  } = usePagination(filtered, 10, q);
+    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+  } = usePersistedListPage(filtered, 10, q);
 
   const remove = async (s) => {
     const ok = await confirmDelete("Are you sure you want to delete this supplier?");
@@ -53,7 +53,7 @@ export function SupplierList() {
           <h1>Suppliers</h1>
           <p>Vendor directory for lab ingredients</p>
         </div>
-        <Link className="btn btn-add" to="/suppliers/new"><Icon name="plus" /> Add Supplier</Link>
+        <Link className="btn btn-add" to="/suppliers/new" state={{ returnTo: listReturnTo }}><Icon name="plus" /> Add Supplier</Link>
       </div>
       <div className="card">
         <div className="toolbar">
@@ -83,7 +83,7 @@ export function SupplierList() {
             <tbody>
               {pageItems.map((s) => (
                 <tr key={s.id}>
-                  <td><Link to={`/suppliers/${s.id}`}>{s.company_name}</Link></td>
+                  <td><Link to={`/suppliers/${s.id}`} state={{ returnTo: listReturnTo }}>{s.company_name}</Link></td>
                   <td>{s.contact_person}<div className="hint">{s.phone}</div></td>
                   <td>{s.city}, {s.country}</td>
                   <td style={{ textTransform: "capitalize" }}>{s.supplier_type}</td>
@@ -109,6 +109,7 @@ export function SupplierForm() {
   const { id } = useParams();
   const isNew = !id || id === "new";
   const navigate = useNavigate();
+  const suppliersBackTo = useReturnTo("/suppliers");
   const [form, setForm] = useState({
     company_name: "",
     contact_person: "",
@@ -131,10 +132,10 @@ export function SupplierForm() {
     e.preventDefault();
     if (isNew) {
       const { data } = await api.post("/suppliers/", form);
-      navigate(`/suppliers/${data.id}`);
+      navigate(`/suppliers/${data.id}`, { state: { returnTo: suppliersBackTo } });
     } else {
       await api.patch(`/suppliers/${id}/`, form);
-      navigate("/suppliers");
+      navigate(suppliersBackTo);
     }
   };
 
@@ -143,7 +144,7 @@ export function SupplierForm() {
       <div className="page-header">
         <h1>{isNew ? "Add Supplier" : "Edit Supplier"}</h1>
         <div className="page-header-actions">
-          <Link className="btn btn-back" to="/suppliers">
+          <Link className="btn btn-back" to={suppliersBackTo}>
             <Icon name="back" />
             Back
           </Link>

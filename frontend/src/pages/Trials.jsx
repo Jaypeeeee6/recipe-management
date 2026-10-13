@@ -12,7 +12,7 @@ import {
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
-import Pagination, { usePagination } from "../components/Pagination";
+import Pagination, { usePersistedListPage, useReturnTo } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import SecretBadge from "../components/SecretBadge";
@@ -296,8 +296,8 @@ export function TrialList() {
     `${t.title} ${t.code} ${t.conducted_by}`.toLowerCase().includes(q.toLowerCase())
   );
   const {
-    page, setPage, pageItems, total, totalPages, from, to,
-  } = usePagination(filtered, 10, `${tab}|${q}`);
+    page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
+  } = usePersistedListPage(filtered, 10, `${tab}|${q}`);
 
   // Jump to the page that contains the highlighted trial.
   useEffect(() => {
@@ -378,12 +378,13 @@ export function TrialList() {
           <Link
             className="btn btn-gold"
             to={compareIds.length >= 2 ? `/trials/compare?ids=${compareIds.join(",")}` : "/trials/compare"}
+            state={{ returnTo: listReturnTo }}
           >
             <Icon name="compare" />
             Compare Trials{compareIds.length ? ` (${compareIds.length})` : ""}
           </Link>
           {canWrite(user) && (
-            <Link className="btn btn-add" to="/trials/new">
+            <Link className="btn btn-add" to="/trials/new" state={{ returnTo: listReturnTo }}>
               <Icon name="plus" />
               New Trial
             </Link>
@@ -400,7 +401,7 @@ export function TrialList() {
           <ul className="alert-list">
             {expiringSoon.map((t) => (
               <li key={t.id}>
-                <Link to={`/trials/${t.id}`}>{t.code || t.title}</Link>
+                <Link to={`/trials/${t.id}`} state={{ returnTo: listReturnTo }}>{t.code || t.title}</Link>
                 {t.title ? ` — ${t.title}` : ""}
                 {t.expiry_remaining_label ? ` (${t.expiry_remaining_label})` : ""}
               </li>
@@ -491,7 +492,7 @@ export function TrialList() {
                     {t.final_dish_photo || t.photo ? (
                       <OpenableThumb src={t.final_dish_photo || t.photo} alt={t.title || ""} />
                     ) : null}
-                    <Link to={`/trials/${t.id}`}>{t.title}</Link>
+                    <Link to={`/trials/${t.id}`} state={{ returnTo: listReturnTo }}>{t.title}</Link>
                     {t.is_secret && <SecretBadge className="badge-secret-inline" />}
                     {t.expiry_status && (
                       <div style={{ marginTop: 4 }}>
@@ -522,7 +523,7 @@ export function TrialList() {
                       <IconAction name="reject" title="Reject" tone="danger" onClick={() => setRejecting(t)} />
                     )}
                     {canWrite(user) && (
-                      <IconAction name="copy" title="Duplicate" to={`/trials/new?from=${t.id}`} />
+                      <IconAction name="copy" title="Duplicate" to={`/trials/new?from=${t.id}`} state={{ returnTo: listReturnTo }} />
                     )}
                     <IconAction name="trash" title="Delete" tone="danger" onClick={() => remove(t)} />
                   </td>
@@ -650,6 +651,7 @@ export function TrialForm() {
   const isNew = !id || id === "new";
   const duplicateFromId = isNew ? searchParams.get("from") : null;
   const navigate = useNavigate();
+  const trialsBackTo = useReturnTo("/trials");
   const { user } = useAuth();
   const { showError, showSuccess } = useDialogs();
   const [form, setForm] = useState(emptyTrial);
@@ -950,7 +952,11 @@ export function TrialForm() {
             : `Edit Trial: ${form.title || "…"}`}
         </h1>
         <div className="page-header-actions">
-          <Link className="btn btn-back" to={isNew ? "/trials" : `/trials/${id}`}>
+          <Link
+            className="btn btn-back"
+            to={isNew ? trialsBackTo : `/trials/${id}`}
+            state={isNew ? undefined : { returnTo: trialsBackTo }}
+          >
             <Icon name="back" />
             Back
           </Link>
@@ -1386,6 +1392,7 @@ export function TrialDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const { showSuccess, showError } = useDialogs();
+  const trialsBackTo = useReturnTo("/trials");
   const [trial, setTrial] = useState(null);
   const [scale, setScale] = useState(1);
   const [committee, setCommittee] = useState([]);
@@ -1443,7 +1450,7 @@ export function TrialDetail() {
     return (
       <div>
         <div className="empty">{loadError}</div>
-        <Link className="btn btn-back" to="/trials" style={{ marginTop: 16 }}>
+        <Link className="btn btn-back" to={trialsBackTo} style={{ marginTop: 16 }}>
           <Icon name="back" />
           Back to Meal Trials
         </Link>
@@ -1456,7 +1463,7 @@ export function TrialDetail() {
       <div>
         <div className="page-header">
           <div>
-            <div className="hint"><Link to="/trials">Meal Trials</Link></div>
+            <div className="hint"><Link to={trialsBackTo}>Meal Trials</Link></div>
             <h1>Meal Trial</h1>
           </div>
         </div>
@@ -1514,7 +1521,7 @@ export function TrialDetail() {
     <div>
       <div className="page-header">
         <div>
-          <Link to="/trials" className="detail-back" aria-label="Back">
+          <Link to={trialsBackTo} className="detail-back" aria-label="Back">
             <Icon name="chevronLeft" />
             <span className="mobile-back-label">Back</span>
           </Link>
@@ -1539,11 +1546,11 @@ export function TrialDetail() {
           )}
           <button className="btn btn-ghost" onClick={printRecipe}><Icon name="printer" /> Print Recipe</button>
           {canWrite(user) && (
-            <Link className="btn btn-ghost" to={`/trials/new?from=${id}`}>
+            <Link className="btn btn-ghost" to={`/trials/new?from=${id}`} state={{ returnTo: trialsBackTo }}>
               <Icon name="copy" /> Duplicate
             </Link>
           )}
-          <Link className="btn btn-gold" to={`/trials/${id}/edit`}><Icon name="edit" /> Edit Trial</Link>
+          <Link className="btn btn-gold" to={`/trials/${id}/edit`} state={{ returnTo: trialsBackTo }}><Icon name="edit" /> Edit Trial</Link>
         </div>
       </div>
 
