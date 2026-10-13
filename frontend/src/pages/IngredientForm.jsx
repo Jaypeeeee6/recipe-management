@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/client";
 import Icon from "../components/Icon";
+import PageBack from "../components/PageBack";
 import Skeleton from "../components/Skeleton";
 import Modal from "../components/Modal";
 import { useReturnTo } from "../components/Pagination";
@@ -268,18 +269,12 @@ export default function IngredientForm() {
 
   return (
     <div>
-      <div className="page-breadcrumb hint">
-        <Link to={ingredientsBackTo}>Ingredients</Link> / {isNew ? "Add" : form.name}
-      </div>
+      <PageBack to={ingredientsBackTo} />
       <div className="page-header">
         <div>
           <h1>{isNew ? "Add Ingredient" : "Edit Ingredient"}</h1>
         </div>
         <div className="page-header-actions">
-          <Link className="btn btn-back" to={ingredientsBackTo}>
-            <Icon name="back" />
-            Back
-          </Link>
           {!loading && (
             <button className="btn btn-save" type="submit" form="ingredient-form">
               <Icon name="save" />

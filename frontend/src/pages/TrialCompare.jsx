@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/client";
-import Icon from "../components/Icon";
+import PageBack from "../components/PageBack";
 import { useReturnTo } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
@@ -172,16 +172,12 @@ export default function TrialCompare() {
 
   return (
     <div>
+      <PageBack to={trialsBackTo} />
       <div className="page-header">
         <div>
-          <div className="hint"><Link to={trialsBackTo}>Meal Trials</Link> / Compare</div>
           <h1>Compare Trials</h1>
           <p>Pick 2–{MAX_COMPARE} trials to see which performs better on each metric</p>
         </div>
-        <Link className="btn btn-back" to={trialsBackTo}>
-          <Icon name="back" />
-          Back
-        </Link>
       </div>
 
       <div className="card card-pad" style={{ marginBottom: 16 }}>

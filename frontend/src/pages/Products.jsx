@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
+import PageBack from "../components/PageBack";
 import Pagination, { usePersistedListPage, useReturnTo } from "../components/Pagination";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import OpenableThumb from "../components/OpenableThumb";
@@ -230,12 +231,12 @@ export function ProductArchives() {
 
   return (
     <div>
+      <PageBack to="/trials" />
       <div className="page-header">
         <div>
           <h1>Archives</h1>
           <p>Rejected and expired meal trials moved out of active trials</p>
         </div>
-        <Link className="btn btn-back" to="/trials">Meal Trials</Link>
       </div>
 
       <ProductTabs />
@@ -472,6 +473,7 @@ export function ProductForm() {
 
   return (
     <div>
+      <PageBack to={productsBackTo} />
       <div className="page-header">
         <div>
           <h1 className="page-title-with-badge">
@@ -494,10 +496,6 @@ export function ProductForm() {
               <Icon name="download" /> Export PDF
             </button>
           )}
-          <Link className="btn btn-back" to={productsBackTo}>
-            <Icon name="back" />
-            Back
-          </Link>
           {!loading && (
             <button className="btn btn-save" type="submit" form="product-form">
               <Icon name="save" />

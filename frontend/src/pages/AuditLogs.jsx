@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import api from "../api/client";
 import Icon from "../components/Icon";
+import PageBack from "../components/PageBack";
 import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import { useAuth } from "../auth/AuthContext";
@@ -44,12 +45,12 @@ export default function AuditLogs() {
 
   return (
     <div>
+      <PageBack to="/settings" />
       <div className="page-header">
         <div>
           <h1>Audit Logs</h1>
           <p>Track who changed what across the lab system</p>
         </div>
-        <Link className="btn btn-back" to="/settings">Settings</Link>
       </div>
 
       <div className="card">

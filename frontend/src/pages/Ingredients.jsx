@@ -31,10 +31,60 @@ const TAB_LABELS = {
   secret: "Secret",
 };
 
+const SORT_OPTIONS = [
+  { value: "name-asc", label: "Name (A–Z)" },
+  { value: "name-desc", label: "Name (Z–A)" },
+  { value: "code-asc", label: "Code (A–Z)" },
+  { value: "code-desc", label: "Code (Z–A)" },
+  { value: "price-asc", label: "Price (Low–High)" },
+  { value: "price-desc", label: "Price (High–Low)" },
+  { value: "date-desc", label: "Date Added (Newest)" },
+  { value: "date-asc", label: "Date Added (Oldest)" },
+];
+
 function normalizeTab(value) {
   if (value === "trial") return "pending"; // legacy URL
   if (value === "reject") return "rejected";
   return INGREDIENT_TABS.includes(value) ? value : "approved";
+}
+
+function normalizeSort(value) {
+  if (!value) return "";
+  return SORT_OPTIONS.some((o) => o.value === value) ? value : "";
+}
+
+function compareIngredients(a, b, sort) {
+  const [field, dir] = sort.split("-");
+  const mult = dir === "desc" ? -1 : 1;
+
+  if (field === "price") {
+    const aMissing = a.price_per_unit == null || a.price_per_unit === "";
+    const bMissing = b.price_per_unit == null || b.price_per_unit === "";
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    const av = Number(a.price_per_unit) || 0;
+    const bv = Number(b.price_per_unit) || 0;
+    return av === bv ? 0 : (av < bv ? -1 : 1) * mult;
+  }
+
+  let av;
+  let bv;
+  if (field === "code") {
+    av = (a.code || "").toLowerCase();
+    bv = (b.code || "").toLowerCase();
+  } else if (field === "date") {
+    av = a.created_at ? Date.parse(a.created_at) : 0;
+    bv = b.created_at ? Date.parse(b.created_at) : 0;
+    if (!Number.isFinite(av)) av = 0;
+    if (!Number.isFinite(bv)) bv = 0;
+  } else {
+    av = (a.name || "").toLowerCase();
+    bv = (b.name || "").toLowerCase();
+  }
+  if (av < bv) return -1 * mult;
+  if (av > bv) return 1 * mult;
+  return 0;
 }
 
 export default function Ingredients() {
@@ -47,6 +97,7 @@ export default function Ingredients() {
   const [tab, setTab] = useState(normalizeTab(params.get("tab")));
   const [category, setCategory] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [sort, setSort] = useState(normalizeSort(params.get("sort")));
   const [view, setView] = useState("table");
   const [q, setQ] = useState(params.get("q") || "");
   const [rejecting, setRejecting] = useState(null);
@@ -75,7 +126,22 @@ export default function Ingredients() {
   useEffect(() => {
     const urlTab = normalizeTab(params.get("tab"));
     setTab((prev) => (prev === urlTab ? prev : urlTab));
+    const urlSort = normalizeSort(params.get("sort"));
+    setSort((prev) => (prev === urlSort ? prev : urlSort));
   }, [params]);
+
+  // Keep sort in the URL so Back restores it with the current page.
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      const current = next.get("sort");
+      const desired = sort || null;
+      if ((current || null) === desired) return prev;
+      if (desired) next.set("sort", desired);
+      else next.delete("sort");
+      return next;
+    }, { replace: true });
+  }, [sort, setSearchParams]);
 
   // Capture highlight once from the URL, then strip it so re-renders don't re-trigger.
   useEffect(() => {
@@ -122,14 +188,17 @@ export default function Ingredients() {
     return flashPhase === "fading" ? "row-highlight-fade" : "row-highlight";
   };
 
-  const filtered = useMemo(() => items, [items]);
+  const filtered = useMemo(() => {
+    if (!sort) return items;
+    return [...items].sort((a, b) => compareIngredients(a, b, sort));
+  }, [items, sort]);
 
   const {
     page, setPage, pageItems, total, totalPages, from, to, listReturnTo,
   } = usePersistedListPage(
     filtered,
     10,
-    `${tab}|${category}|${supplier}|${q}`
+    `${tab}|${category}|${supplier}|${q}|${sort}`
   );
 
   const grouped = useMemo(() => {
@@ -404,7 +473,13 @@ export default function Ingredients() {
             className={`tab ${tab === key ? "active" : ""}`}
             onClick={() => {
               setTab(key);
-              setSearchParams({ tab: key });
+              setSearchParams((prev) => {
+                const next = new URLSearchParams();
+                next.set("tab", key);
+                const s = prev.get("sort");
+                if (s) next.set("sort", s);
+                return next;
+              });
             }}
           >
             {TAB_LABELS[key]}
@@ -431,7 +506,23 @@ export default function Ingredients() {
             <option value="">All suppliers</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.company_name}</option>)}
           </select>
-          <button className="btn btn-ghost" onClick={() => setView(view === "table" ? "card" : "table")}>
+          <select
+            className="select"
+            style={{ width: 200 }}
+            value={sort}
+            onChange={(e) => setSort(normalizeSort(e.target.value))}
+            aria-label="Sort by"
+          >
+            <option value="">Sort by</option>
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            className="btn btn-ghost"
+            style={{ marginLeft: "auto" }}
+            onClick={() => setView(view === "table" ? "card" : "table")}
+          >
             <Icon name="layout" />
             {view === "table" ? "Card View" : "Table View"}
           </button>

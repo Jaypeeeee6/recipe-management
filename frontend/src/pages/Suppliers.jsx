@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
+import PageBack from "../components/PageBack";
 import Pagination, { usePersistedListPage, useReturnTo } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import Stars from "../components/Stars";
@@ -141,13 +142,10 @@ export function SupplierForm() {
 
   return (
     <div>
+      <PageBack to={suppliersBackTo} />
       <div className="page-header">
         <h1>{isNew ? "Add Supplier" : "Edit Supplier"}</h1>
         <div className="page-header-actions">
-          <Link className="btn btn-back" to={suppliersBackTo}>
-            <Icon name="back" />
-            Back
-          </Link>
           {!loading && (
             <button className="btn btn-save" type="submit" form="supplier-form">
               <Icon name="save" />

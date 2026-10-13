@@ -12,6 +12,7 @@ import {
 import api from "../api/client";
 import Icon, { IconAction } from "../components/Icon";
 import Modal from "../components/Modal";
+import PageBack from "../components/PageBack";
 import Pagination, { usePersistedListPage, useReturnTo } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
@@ -945,6 +946,10 @@ export function TrialForm() {
 
   return (
     <div className="edit-trial-page">
+      <PageBack
+        to={isNew ? trialsBackTo : `/trials/${id}`}
+        state={isNew ? undefined : { returnTo: trialsBackTo }}
+      />
       <div className="page-header sticky-form-header">
         <h1>
           {isNew
@@ -952,14 +957,6 @@ export function TrialForm() {
             : `Edit Trial: ${form.title || "…"}`}
         </h1>
         <div className="page-header-actions">
-          <Link
-            className="btn btn-back"
-            to={isNew ? trialsBackTo : `/trials/${id}`}
-            state={isNew ? undefined : { returnTo: trialsBackTo }}
-          >
-            <Icon name="back" />
-            Back
-          </Link>
           {!loading && (
             <button className="btn btn-save" type="submit" form="trial-form">
               <Icon name="save" />
@@ -1449,11 +1446,8 @@ export function TrialDetail() {
   if (loadError) {
     return (
       <div>
+        <PageBack to={trialsBackTo} />
         <div className="empty">{loadError}</div>
-        <Link className="btn btn-back" to={trialsBackTo} style={{ marginTop: 16 }}>
-          <Icon name="back" />
-          Back to Meal Trials
-        </Link>
       </div>
     );
   }
@@ -1461,9 +1455,9 @@ export function TrialDetail() {
   if (!trial) {
     return (
       <div>
+        <PageBack to={trialsBackTo} />
         <div className="page-header">
           <div>
-            <div className="hint"><Link to={trialsBackTo}>Meal Trials</Link></div>
             <h1>Meal Trial</h1>
           </div>
         </div>
@@ -1519,12 +1513,9 @@ export function TrialDetail() {
 
   return (
     <div>
+      <PageBack to={trialsBackTo} />
       <div className="page-header">
         <div>
-          <Link to={trialsBackTo} className="detail-back" aria-label="Back">
-            <Icon name="chevronLeft" />
-            <span className="mobile-back-label">Back</span>
-          </Link>
           <h1 className="page-title-with-badge">
             {trial.title}
             {trial.is_secret && <SecretBadge />}
