@@ -46,14 +46,26 @@ function eventTone(event) {
   if (event.status === "expired") return "expired";
   if (event.status === "expiring_soon") return "soon";
   if (event.type === "trial_expiry") return "trial-expiry";
+  if (event.type === "ingredient_shelf_life") return "ingredient";
   return "ingredient";
 }
 
-function eventLabel(type) {
+function eventLabel(event) {
+  const type = typeof event === "string" ? event : event?.type;
+  const status = typeof event === "string" ? null : event?.status;
   if (type === "trial") return "Meal trial";
-  if (type === "trial_expiry") return "Trial shelf life";
-  if (type === "ingredient_expiry") return "Ingredient expiry";
+  if (type === "trial_expiry") return status === "expired" ? "Expired" : "Trial expiry";
+  if (type === "ingredient_shelf_life") {
+    return status === "expired" ? "Expired" : "Ingredient shelf life";
+  }
   return type;
+}
+
+function eventTitle(event) {
+  if (event.status === "expired" && event.type === "trial_expiry" && !/\bexpired\b/i.test(event.title || "")) {
+    return `${event.title} expired`.replace(/\bexpires\b/i, "expired");
+  }
+  return event.title;
 }
 
 function eventLink(event) {
@@ -70,7 +82,7 @@ export default function Calendar() {
   const [filters, setFilters] = useState({
     trial: true,
     trial_expiry: true,
-    ingredient_expiry: true,
+    ingredient_shelf_life: true,
   });
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -192,10 +204,10 @@ export default function Calendar() {
             key={event.id}
             to={eventLink(event)}
             className={`cal-chip cal-chip-${eventTone(event)}`}
-            title={`${eventLabel(event.type)}: ${event.title}`}
+            title={`${eventLabel(event)}: ${eventTitle(event)}`}
             onClick={(e) => e.stopPropagation()}
           >
-            {event.title}
+            {eventTitle(event)}
           </Link>
         ))}
         {extra > 0 && <div className="cal-more">+{extra} more</div>}
@@ -236,11 +248,15 @@ export default function Calendar() {
           </label>
           <label className="cal-filter">
             <input type="checkbox" checked={filters.trial_expiry} onChange={() => toggleFilter("trial_expiry")} />
-            <span className="cal-legend cal-chip-trial-expiry">Trial shelf life</span>
+            <span className="cal-legend cal-chip-trial-expiry">Trial expiry</span>
           </label>
           <label className="cal-filter">
-            <input type="checkbox" checked={filters.ingredient_expiry} onChange={() => toggleFilter("ingredient_expiry")} />
-            <span className="cal-legend cal-chip-ingredient">Ingredient expiry</span>
+            <input
+              type="checkbox"
+              checked={filters.ingredient_shelf_life}
+              onChange={() => toggleFilter("ingredient_shelf_life")}
+            />
+            <span className="cal-legend cal-chip-ingredient">Ingredient shelf life</span>
           </label>
         </div>
       </div>
@@ -320,8 +336,8 @@ export default function Calendar() {
             {selectedEvents.map((event) => (
               <li key={event.id}>
                 <Link to={eventLink(event)} className={`cal-day-item cal-chip-${eventTone(event)}`}>
-                  <span className="cal-day-type">{eventLabel(event.type)}</span>
-                  <span className="cal-day-title">{event.title}</span>
+                  <span className="cal-day-type">{eventLabel(event)}</span>
+                  <span className="cal-day-title">{eventTitle(event)}</span>
                   {event.status === "expired" && <span className="cal-tag">Expired</span>}
                   {event.status === "expiring_soon" && <span className="cal-tag cal-tag-soon">Expiring soon</span>}
                 </Link>

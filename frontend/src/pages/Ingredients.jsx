@@ -7,6 +7,7 @@ import Pagination, { usePagination } from "../components/Pagination";
 import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import SecretBadge from "../components/SecretBadge";
+import OpenableThumb from "../components/OpenableThumb";
 import { formatDate, formatMoney } from "../utils/format";
 import { exportIngredientsPdf } from "../utils/ingredientExport";
 import { canManageLabSettings, canWrite } from "../utils/roles";
@@ -21,9 +22,18 @@ function canRejectIngredient(item) {
   return !item.is_trial || item.trial_status === "testing";
 }
 
-const INGREDIENT_TABS = ["approved", "trial", "secret"];
+const INGREDIENT_TABS = ["pending", "rejected", "approved", "secret"];
+
+const TAB_LABELS = {
+  pending: "Pending",
+  rejected: "Rejected",
+  approved: "Approved",
+  secret: "Secret",
+};
 
 function normalizeTab(value) {
+  if (value === "trial") return "pending"; // legacy URL
+  if (value === "reject") return "rejected";
   return INGREDIENT_TABS.includes(value) ? value : "approved";
 }
 
@@ -37,7 +47,6 @@ export default function Ingredients() {
   const [tab, setTab] = useState(normalizeTab(params.get("tab")));
   const [category, setCategory] = useState("");
   const [supplier, setSupplier] = useState("");
-  const [status, setStatus] = useState("");
   const [view, setView] = useState("table");
   const [q, setQ] = useState(params.get("q") || "");
   const [rejecting, setRejecting] = useState(null);
@@ -54,7 +63,6 @@ export default function Ingredients() {
     const query = new URLSearchParams({ tab: activeTab });
     if (category) query.set("category", category);
     if (supplier) query.set("supplier", supplier);
-    if (status) query.set("status", status);
     if (q) query.set("search", q);
     api.get(`/ingredients/?${query}`).then((res) => setItems(res.data)).finally(() => setLoading(false));
   };
@@ -107,21 +115,12 @@ export default function Ingredients() {
   useEffect(() => {
     const timer = setTimeout(() => load(), q ? 250 : 0);
     return () => clearTimeout(timer);
-  }, [tab, category, supplier, status, q]);
+  }, [tab, category, supplier, q]);
 
   const flashClass = (id) => {
     if (!flashId || String(id) !== String(flashId) || flashPhase === "off") return undefined;
     return flashPhase === "fading" ? "row-highlight-fade" : "row-highlight";
   };
-
-  const expired = useMemo(
-    () => items.filter((i) => i.expiry_status === "expired"),
-    [items]
-  );
-  const expiringSoon = useMemo(
-    () => items.filter((i) => i.expiry_status === "expiring_soon"),
-    [items]
-  );
 
   const filtered = useMemo(() => items, [items]);
 
@@ -130,7 +129,7 @@ export default function Ingredients() {
   } = usePagination(
     filtered,
     10,
-    `${tab}|${category}|${supplier}|${status}|${q}`
+    `${tab}|${category}|${supplier}|${q}`
   );
 
   const grouped = useMemo(() => {
@@ -198,7 +197,7 @@ export default function Ingredients() {
       setRejecting(null);
       setNotes("");
       showSuccess("Ingredient rejected.");
-      const nextTab = rejecting.is_secret ? "secret" : "trial";
+      const nextTab = rejecting.is_secret ? "secret" : "rejected";
       setTab(nextTab);
       setSearchParams({ tab: nextTab });
       load(nextTab);
@@ -226,25 +225,15 @@ export default function Ingredients() {
     const supplierLabel = supplier
       ? suppliers.find((s) => String(s.id) === String(supplier))?.company_name
       : "";
-    const statusLabels = {
-      valid: "Valid",
-      expiring_soon: "Expiring Soon",
-      expired: "Expired",
-    };
     try {
       exportIngredientsPdf({
         items: filtered,
         grouped,
         filters: {
-          tabLabel: tab === "trial"
-            ? "Pending / Rejected"
-            : tab === "secret"
-              ? "Secret Ingredients"
-              : "Approved Ingredients",
+          tabLabel: `${TAB_LABELS[tab] || tab} Ingredients`,
           search: q.trim(),
           categoryLabel,
           supplierLabel,
-          statusLabel: statusLabels[status] || "",
         },
       });
     } catch (err) {
@@ -303,15 +292,22 @@ export default function Ingredients() {
       });
       const errCount = data.errors?.length || 0;
       const suppliersCreated = data.suppliers_created || 0;
+      const dupCount = data.duplicates || 0;
+      const supplierNote = suppliersCreated
+        ? ` ${suppliersCreated} new supplier(s) created.`
+        : "";
+      const dupNote = dupCount
+        ? ` ${dupCount} duplicate(s) skipped.`
+        : "";
       if (data.created) {
-        const supplierNote = suppliersCreated
-          ? ` ${suppliersCreated} new supplier(s) created.`
-          : "";
         showSuccess(
           errCount
-            ? `Imported ${data.created} ingredient(s).${supplierNote} ${errCount} row(s) had errors.`
-            : `Imported ${data.created} ingredient(s).${supplierNote}`
+            ? `Imported ${data.created} ingredient(s).${supplierNote}${dupNote} ${errCount} row(s) had errors.`
+            : `Imported ${data.created} ingredient(s).${supplierNote}${dupNote}`
         );
+        load();
+      } else if (dupCount && !errCount) {
+        showSuccess(`No new ingredients. ${dupCount} duplicate(s) skipped.`);
         load();
       } else if (errCount) {
         const first = data.errors[0];
@@ -393,81 +389,27 @@ export default function Ingredients() {
               />
               <Link className="btn btn-add" to="/ingredients/new">
                 <Icon name="plus" />
-                {tab === "trial" ? "Add Trial Product" : "Add Ingredient"}
+                {tab === "pending" || tab === "rejected" ? "Add Trial Product" : "Add Ingredient"}
               </Link>
             </>
           )}
         </div>
       </div>
 
-      {expired.length > 0 && (
-        <div className="alert alert-danger" role="alert">
-          <strong>
-            {expired.length === 1
-              ? "1 ingredient is expired"
-              : `${expired.length} ingredients are expired`}
-          </strong>
-          <ul className="alert-list">
-            {expired.map((i) => (
-              <li key={i.id}>
-                <Link to={`/ingredients/${i.id}`}>{i.code || i.name}</Link>
-                {i.name ? ` — ${i.name}` : ""}
-                {i.expiry_date ? ` (expired ${formatDate(i.expiry_date)})` : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {expiringSoon.length > 0 && (
-        <div className="alert alert-warn" role="alert">
-          <strong>
-            {expiringSoon.length === 1
-              ? "1 ingredient is expiring soon"
-              : `${expiringSoon.length} ingredients are expiring soon`}
-          </strong>
-          <ul className="alert-list">
-            {expiringSoon.map((i) => (
-              <li key={i.id}>
-                <Link to={`/ingredients/${i.id}`}>{i.code || i.name}</Link>
-                {i.name ? ` — ${i.name}` : ""}
-                {i.expiry_date ? ` (expires ${formatDate(i.expiry_date)})` : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div className="tabs">
-        <button
-          type="button"
-          className={`tab ${tab === "approved" ? "active" : ""}`}
-          onClick={() => {
-            setTab("approved");
-            setSearchParams({ tab: "approved" });
-          }}
-        >
-          Approved Ingredients
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "trial" ? "active" : ""}`}
-          onClick={() => {
-            setTab("trial");
-            setSearchParams({ tab: "trial" });
-          }}
-        >
-          Pending / Rejected
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "secret" ? "active" : ""}`}
-          onClick={() => {
-            setTab("secret");
-            setSearchParams({ tab: "secret" });
-          }}
-        >
-          Secret
-        </button>
+        {INGREDIENT_TABS.map((key) => (
+          <button
+            key={key}
+            type="button"
+            className={`tab ${tab === key ? "active" : ""}`}
+            onClick={() => {
+              setTab(key);
+              setSearchParams({ tab: key });
+            }}
+          >
+            {TAB_LABELS[key]}
+          </button>
+        ))}
       </div>
 
       <div className="card">
@@ -489,12 +431,6 @@ export default function Ingredients() {
             <option value="">All suppliers</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.company_name}</option>)}
           </select>
-          <select className="select" style={{ width: 160 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">All statuses</option>
-            <option value="valid">Valid</option>
-            <option value="expiring_soon">Expiring Soon</option>
-            <option value="expired">Expired</option>
-          </select>
           <button className="btn btn-ghost" onClick={() => setView(view === "table" ? "card" : "table")}>
             <Icon name="layout" />
             {view === "table" ? "Card View" : "Table View"}
@@ -503,11 +439,13 @@ export default function Ingredients() {
 
         {loading ? <Skeleton count={6} /> : filtered.length === 0 && (
           <div className="empty">
-            {tab === "trial"
-              ? "No trial products yet."
-              : tab === "secret"
-                ? "No secret ingredients."
-                : "No ingredients found."}
+            {tab === "pending"
+              ? "No pending ingredients."
+              : tab === "rejected"
+                ? "No rejected ingredients."
+                : tab === "secret"
+                  ? "No secret ingredients."
+                  : "No approved ingredients found."}
           </div>
         )}
 
@@ -528,7 +466,6 @@ export default function Ingredients() {
                     <th>Qty</th>
                     <th>Price / Unit</th>
                     <th>Date Added</th>
-                    <th>Expiry</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -536,19 +473,15 @@ export default function Ingredients() {
                 <tbody>
                   {section.items.map((i) => {
                     const highlight = flashClass(i.id);
-                    const rowClass = [
-                      i.expiry_status === "expired" ? "row-expired" : "",
-                      highlight || "",
-                    ].filter(Boolean).join(" ") || undefined;
                     return (
                     <tr
                       key={i.id}
                       data-ingredient-id={i.id}
-                      className={rowClass}
+                      className={highlight || undefined}
                     >
                       <td>{i.code}</td>
                       <td>
-                        {i.photo ? <img className="thumb" src={i.photo} alt="" /> : null}
+                        {i.photo ? <OpenableThumb src={i.photo} alt={i.name || ""} /> : null}
                         <Link to={`/ingredients/${i.id}`}>{i.name}</Link>
                         {i.is_secret && <SecretBadge className="badge-secret-inline" />}
                         {i.is_low_stock && <span className="badge badge-low" style={{ marginLeft: 6 }}>Low Stock</span>}
@@ -562,14 +495,11 @@ export default function Ingredients() {
                           : "—"}
                       </td>
                       <td>{i.created_at ? formatDate(i.created_at) : "—"}</td>
-                      <td className={i.expiry_status === "expiring_soon" ? "text-expiry-danger" : undefined}>
-                        {i.expiry_date || "—"}
-                      </td>
                       <td>
                         {i.is_trial ? (
                           <StatusBadge value={i.trial_status} />
                         ) : (
-                          <StatusBadge value={i.expiry_status} kind="expiry" />
+                          <StatusBadge value="approved" />
                         )}
                       </td>
                       {renderActions(i)}
@@ -595,7 +525,13 @@ export default function Ingredients() {
                   key={i.id}
                   data-ingredient-id={i.id}
                 >
-                  {i.photo && <img className="trial-hero-photo" src={i.photo} alt="" style={{ maxHeight: 140, marginBottom: 8 }} />}
+                  {i.photo && (
+                    <OpenableThumb
+                      src={i.photo}
+                      alt={i.name || ""}
+                      className="trial-hero-photo"
+                    />
+                  )}
                   <div className="hint">{i.code}</div>
                   <h3 style={{ marginTop: 4 }}>
                     {i.name}
@@ -611,10 +547,7 @@ export default function Ingredients() {
                       : "No price set"}
                   </p>
                   <div style={{ margin: "8px 0" }}>
-                    <StatusBadge
-                      value={i.is_trial ? i.trial_status : i.expiry_status}
-                      kind={i.is_trial ? "status" : "expiry"}
-                    />
+                    <StatusBadge value={i.is_trial ? i.trial_status : "approved"} />
                   </div>
                   <Link to={`/ingredients/${i.id}`}>View details</Link>
                   {renderCardActions(i)}

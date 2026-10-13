@@ -1,4 +1,4 @@
-import { expiryLabel, formatDate, formatMoney } from "./format";
+import { formatDate, formatMoney } from "./format";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -12,7 +12,7 @@ function statusLabel(item) {
   if (item.is_trial) {
     return String(item.trial_status || "").replaceAll("_", " ") || "—";
   }
-  return expiryLabel(item.expiry_status) || "—";
+  return "approved";
 }
 
 function priceLabel(item) {
@@ -39,7 +39,6 @@ export function exportIngredientsPdf({ items, grouped, filters = {} }) {
   if (filters.search) filterLines.push(`Search: ${filters.search}`);
   if (filters.categoryLabel) filterLines.push(`Category: ${filters.categoryLabel}`);
   if (filters.supplierLabel) filterLines.push(`Supplier: ${filters.supplierLabel}`);
-  if (filters.statusLabel) filterLines.push(`Status: ${filters.statusLabel}`);
   filterLines.push(`Exported: ${formatDate(new Date().toISOString())}`);
   filterLines.push(`Total: ${list.length} ingredient${list.length === 1 ? "" : "s"}`);
 
@@ -55,7 +54,6 @@ export function exportIngredientsPdf({ items, grouped, filters = {} }) {
           <td>${escapeHtml(`${i.quantity ?? "—"} ${i.unit || ""}`.trim())}</td>
           <td>${escapeHtml(priceLabel(i))}</td>
           <td>${escapeHtml(i.created_at ? formatDate(i.created_at) : "—")}</td>
-          <td>${escapeHtml(i.expiry_date ? formatDate(i.expiry_date) : "—")}</td>
           <td>${escapeHtml(statusLabel(i))}</td>
         </tr>`
         )
@@ -72,7 +70,6 @@ export function exportIngredientsPdf({ items, grouped, filters = {} }) {
               <th>Qty</th>
               <th>Price / Unit</th>
               <th>Date Added</th>
-              <th>Expiry</th>
               <th>Status</th>
             </tr>
           </thead>

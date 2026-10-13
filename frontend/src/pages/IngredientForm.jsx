@@ -16,7 +16,6 @@ const empty = {
   category: "",
   supplier: "",
   batch_number: "",
-  expiry_date: "",
   received_date: "",
   unit: "kg",
   quantity: 0,
@@ -124,7 +123,7 @@ export default function IngredientForm() {
       ...rest,
       category: Number(form.category),
       supplier: form.supplier ? Number(form.supplier) : null,
-      expiry_date: form.expiry_date || null,
+      expiry_date: null,
       received_date: form.received_date || null,
       shelf_life_days: form.shelf_life_days === "" ? null : Number(form.shelf_life_days),
       alternative_ids: form.alternative_ids,
@@ -137,8 +136,10 @@ export default function IngredientForm() {
     return payload;
   };
 
-  const navigateToIngredientsList = (ingredientId, isTrial, isSecret) => {
-    const tab = isSecret ? "secret" : isTrial ? "trial" : "approved";
+  const navigateToIngredientsList = (ingredientId, isTrial, isSecret, trialStatus) => {
+    let tab = "approved";
+    if (isSecret) tab = "secret";
+    else if (isTrial) tab = trialStatus === "rejected" ? "rejected" : "pending";
     navigate(`/ingredients?tab=${tab}&highlight=${ingredientId}`);
   };
 
@@ -158,7 +159,12 @@ export default function IngredientForm() {
         if (payload.is_secret && !canSeeSecrets(user) && !(payload.secret_viewer_ids || []).includes(user?.id)) {
           navigate("/ingredients");
         } else {
-          navigateToIngredientsList(data.id, !!data.is_trial, !!data.is_secret);
+          navigateToIngredientsList(
+            data.id,
+            !!data.is_trial,
+            !!data.is_secret,
+            data.trial_status
+          );
         }
       } catch (err) {
         const detail = err.response?.data;
@@ -181,7 +187,12 @@ export default function IngredientForm() {
           navigate("/ingredients");
           return;
         }
-        navigateToIngredientsList(data.id, !!data.is_trial, !!data.is_secret);
+        navigateToIngredientsList(
+          data.id,
+          !!data.is_trial,
+          !!data.is_secret,
+          data.trial_status
+        );
       } catch (err) {
         const detail = err.response?.data;
         if (detail?.confirm_password) {
@@ -388,10 +399,6 @@ export default function IngredientForm() {
           <div className="field">
             <label>Received Date</label>
             <input className="input" type="date" value={form.received_date || ""} onChange={(e) => set("received_date", e.target.value)} />
-          </div>
-          <div className="field">
-            <label>Expiry Date</label>
-            <input className="input" type="date" value={form.expiry_date || ""} onChange={(e) => set("expiry_date", e.target.value)} />
           </div>
           <div className="field">
             <label>Unit</label>

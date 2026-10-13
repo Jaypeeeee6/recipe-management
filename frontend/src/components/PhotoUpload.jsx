@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import api from "../api/client";
 import Icon from "./Icon";
+import OpenableThumb from "./OpenableThumb";
 
 /**
  * Photo picker + preview. For existing records, uploads immediately.
@@ -65,7 +66,7 @@ export default function PhotoUpload({
       <div className="photo-upload-row">
         <div className={`photo-frame ${preview ? "" : "empty"}`}>
           {preview ? (
-            <img src={preview} alt="" />
+            <OpenableThumb src={preview} alt={label || ""} className="photo-frame-img" />
           ) : (
             <span>No photo yet</span>
           )}

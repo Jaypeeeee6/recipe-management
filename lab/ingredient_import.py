@@ -30,7 +30,6 @@ INGREDIENT_IMPORT_COLUMNS = [
     ("category", "Category *"),
     ("supplier", "Supplier"),
     ("batch_number", "Batch Number"),
-    ("expiry_date", "Expiry Date (YYYY-MM-DD)"),
     ("received_date", "Received Date (YYYY-MM-DD)"),
     ("unit", "Unit"),
     ("quantity", "Quantity"),
@@ -48,7 +47,6 @@ SAMPLE_ROW = {
     "category": "Flour",
     "supplier": "",
     "batch_number": "BATCH-001",
-    "expiry_date": "2026-12-31",
     "received_date": date.today().isoformat(),
     "unit": "kg",
     "quantity": "25",
@@ -158,7 +156,7 @@ def build_ingredient_import_template(
         "Use the dropdowns for Category, Supplier, Unit, Storage Conditions, Status, and Secret.",
         "Required: Name * and Category * (pick a category from the dropdown).",
         "Supplier is optional. New supplier names in the file are created automatically.",
-        "Dates: YYYY-MM-DD (example 2026-12-31).",
+        "Received date: YYYY-MM-DD (example 2026-12-31).",
         "Status: trial (default) or approved.",
         "Secret: yes/no (default no). Only Admin/IT can import secret=yes rows.",
         "Storage: Freezer, Chiller, or Room Temperature.",
@@ -284,14 +282,6 @@ def _normalize_headers(header_row):
         "category": ("category", "category *", "category name"),
         "supplier": ("supplier", "supplier name", "company"),
         "batch_number": ("batch number", "batch", "batch_number", "lot"),
-        "expiry_date": (
-            "expiry date (yyyy-mm-dd)",
-            "expiry date",
-            "expiry",
-            "expiry_date",
-            "expiry date(yyy-mm-dd)",
-            "expiry date yyy mm dd",
-        ),
         "received_date": (
             "received date (yyyy-mm-dd)",
             "received date",
@@ -315,7 +305,6 @@ def _normalize_headers(header_row):
         "category": ("category",),
         "supplier": ("supplier",),
         "batch_number": ("batch", "lot"),
-        "expiry_date": ("expiry",),
         "received_date": ("received",),
         "unit": ("unit", "unite"),
         "quantity": ("quantity", "qty"),
@@ -393,9 +382,16 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
 
     categories = {c.name.strip().lower(): c for c in Category.objects.all()}
     suppliers = {s.company_name.strip().lower(): s for s in Supplier.objects.all()}
+    # Skip re-import of the same ingredient (name + category, case-insensitive).
+    existing_keys = {
+        (n.strip().lower(), cid)
+        for n, cid in Ingredient.objects.values_list("name", "category_id")
+    }
+    seen_in_file = set()
 
     created = 0
     skipped = 0
+    duplicates = 0
     suppliers_created = 0
     errors = []
 
@@ -422,6 +418,12 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
             category = categories.get(category_name.lower())
             if not category:
                 raise ValueError(f"Unknown category: {category_name!r}")
+
+            dup_key = (name.lower(), category.id)
+            if dup_key in existing_keys or dup_key in seen_in_file:
+                duplicates += 1
+                continue
+            seen_in_file.add(dup_key)
 
             supplier = None
             if "supplier" in header_map:
@@ -466,7 +468,7 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
                 category=category,
                 supplier=supplier,
                 batch_number=_as_str(col("batch_number")),
-                expiry_date=_as_date(col("expiry_date")),
+                expiry_date=None,
                 received_date=_as_date(col("received_date")),
                 unit=unit,
                 quantity=quantity,
@@ -485,6 +487,7 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
                     price=price,
                     recorded_at=timezone.localdate(),
                 )
+            existing_keys.add(dup_key)
             created += 1
         except Exception as exc:  # noqa: BLE001 — collect per-row errors
             errors.append({"row": row_number, "message": str(exc)})
@@ -492,6 +495,7 @@ def import_ingredients_from_excel(file_obj, *, allow_secret=False):
     return {
         "created": created,
         "skipped": skipped,
+        "duplicates": duplicates,
         "suppliers_created": suppliers_created,
         "errors": errors,
     }

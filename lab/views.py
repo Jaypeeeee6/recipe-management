@@ -15,7 +15,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .audit import log_action
 from .expiry_alerts import maybe_run_expiry_alerts, send_trial_expiry_alerts
-from .ingredient_import import build_ingredient_import_template, import_ingredients_from_excel
 from .models import (
     AuditLog,
     Category,
@@ -181,8 +180,19 @@ class IngredientViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         tab = self.request.query_params.get("tab")
-        if tab == "trial":
-            qs = qs.filter(is_trial=True, is_secret=False)
+        if tab in ("pending", "trial"):
+            # "trial" kept as alias for older links → pending (under testing)
+            qs = qs.filter(
+                is_trial=True,
+                is_secret=False,
+                trial_status=TrialProductStatus.TESTING,
+            )
+        elif tab in ("rejected", "reject"):
+            qs = qs.filter(
+                is_trial=True,
+                is_secret=False,
+                trial_status=TrialProductStatus.REJECTED,
+            )
         elif tab == "secret":
             qs = qs.filter(is_secret=True)
         elif tab == "approved":
@@ -350,6 +360,13 @@ class IngredientViewSet(viewsets.ModelViewSet):
     def import_template(self, request):
         if not can_write(request.user):
             return Response({"detail": "Read-only role."}, status=403)
+        try:
+            from .ingredient_import import build_ingredient_import_template
+        except ImportError:
+            return Response(
+                {"detail": "Excel support is not installed on the server (pip install openpyxl)."},
+                status=500,
+            )
         content = build_ingredient_import_template()
         response = HttpResponse(
             content,
@@ -368,6 +385,13 @@ class IngredientViewSet(viewsets.ModelViewSet):
         name = (upload.name or "").lower()
         if not name.endswith(".xlsx"):
             return Response({"detail": "Only .xlsx Excel files are supported."}, status=400)
+        try:
+            from .ingredient_import import import_ingredients_from_excel
+        except ImportError:
+            return Response(
+                {"detail": "Excel support is not installed on the server (pip install openpyxl)."},
+                status=500,
+            )
         result = import_ingredients_from_excel(
             upload,
             allow_secret=can_see_secrets(request.user),
@@ -380,11 +404,16 @@ class IngredientViewSet(viewsets.ModelViewSet):
             summary=(
                 f"Imported ingredients from Excel: "
                 f"{result['created']} created, "
+                f"{result.get('duplicates', 0)} duplicates skipped, "
                 f"{result.get('suppliers_created', 0)} suppliers created, "
                 f"{len(result['errors'])} errors"
             ),
         )
-        status_code = status.HTTP_200_OK if result["created"] or not result["errors"] else status.HTTP_400_BAD_REQUEST
+        status_code = (
+            status.HTTP_200_OK
+            if result["created"] or result.get("duplicates") or not result["errors"]
+            else status.HTTP_400_BAD_REQUEST
+        )
         return Response(result, status=status_code)
 
     @action(detail=False, methods=["post"], url_path="delete-all")
@@ -1132,7 +1161,9 @@ def calendar_view(request):
     if (end - start).days > 400:
         return Response({"detail": "Date range too large (max 400 days)."}, status=400)
 
-    types_raw = (request.query_params.get("types") or "trial,trial_expiry,ingredient_expiry").lower()
+    types_raw = (
+        request.query_params.get("types") or "trial,trial_expiry,ingredient_shelf_life"
+    ).lower()
     wanted = {t.strip() for t in types_raw.split(",") if t.strip()}
 
     events = []
@@ -1169,13 +1200,15 @@ def calendar_view(request):
             "id", "code", "title", "expires_at", "expiry_unit", "is_secret"
         ):
             local_day = timezone.localtime(t.expires_at).date()
+            status_key = t.expiry_status
+            word = "expired" if status_key == "expired" else "expires"
             events.append(
                 {
                     "id": f"trial-{t.id}-expiry",
                     "type": "trial_expiry",
                     "date": local_day.isoformat(),
-                    "title": f"{t.code} shelf life ends",
-                    "status": t.expiry_status,
+                    "title": f"{t.code} {word}",
+                    "status": status_key,
                     "entity_type": "trial",
                     "entity_id": t.id,
                     "is_secret": t.is_secret,
@@ -1183,27 +1216,53 @@ def calendar_view(request):
                 }
             )
 
-    if "ingredient_expiry" in wanted:
-        ing_qs = Ingredient.objects.filter(
-            expiry_date__isnull=False,
-            expiry_date__gte=start,
-            expiry_date__lte=end,
-        ).select_related("category")
+    if "ingredient_shelf_life" in wanted or "ingredient_expiry" in wanted:
+        # End date = (received_date or date added) + shelf_life_days
+        today = timezone.localdate()
+        ing_qs = Ingredient.objects.filter(shelf_life_days__isnull=False, shelf_life_days__gt=0)
         ing_visibility = visible_ingredients_q(request.user)
         if ing_visibility:
             ing_qs = ing_qs.filter(ing_visibility).distinct()
-        for i in ing_qs:
+        for i in ing_qs.only(
+            "id",
+            "code",
+            "name",
+            "shelf_life_days",
+            "received_date",
+            "created_at",
+            "is_secret",
+        ):
+            anchor = i.received_date
+            if not anchor and i.created_at:
+                anchor = timezone.localtime(i.created_at).date()
+            if not anchor:
+                continue
+            end_day = anchor + timedelta(days=i.shelf_life_days)
+            if end_day < start or end_day > end:
+                continue
+            days_left = (end_day - today).days
+            if days_left < 0:
+                status_key = "expired"
+            elif days_left <= 30:
+                status_key = "expiring_soon"
+            else:
+                status_key = "valid"
+            name = f"{i.code} {i.name}".strip()
+            title = f"{name} expired" if status_key == "expired" else name
             events.append(
                 {
-                    "id": f"ingredient-{i.id}-expiry",
-                    "type": "ingredient_expiry",
-                    "date": i.expiry_date.isoformat(),
-                    "title": f"{i.code} {i.name}".strip(),
-                    "status": i.expiry_status,
+                    "id": f"ingredient-{i.id}-shelf-life",
+                    "type": "ingredient_shelf_life",
+                    "date": end_day.isoformat(),
+                    "title": title,
+                    "status": status_key,
                     "entity_type": "ingredient",
                     "entity_id": i.id,
                     "is_secret": i.is_secret,
-                    "meta": {"category": i.category.name if i.category_id else ""},
+                    "meta": {
+                        "shelf_life_days": i.shelf_life_days,
+                        "anchor": anchor.isoformat(),
+                    },
                 }
             )
 

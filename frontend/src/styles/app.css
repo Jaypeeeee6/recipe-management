@@ -1277,7 +1277,8 @@ label.required::after,
   color: var(--muted);
   font-size: 13px;
 }
-.photo-frame img {
+.photo-frame img,
+.photo-frame .photo-frame-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
