@@ -207,10 +207,22 @@ export default function Ingredients() {
     return flashPhase === "fading" ? "row-highlight-fade" : "row-highlight";
   };
 
-  const filtered = useMemo(() => {
-    if (!sort) return items;
-    return [...items].sort((a, b) => compareIngredients(a, b, sort));
-  }, [items, sort]);
+  // Group by category first, then sort within each category, then flatten.
+  // That way pagination walks whole categories instead of mixing a few rows
+  // from every category onto each page.
+  const categorySections = useMemo(() => {
+    return groupIngredientsByCategory(items, categories).map((section) => ({
+      name: section.name,
+      items: sort
+        ? [...section.items].sort((a, b) => compareIngredients(a, b, sort))
+        : section.items,
+    }));
+  }, [items, categories, sort]);
+
+  const filtered = useMemo(
+    () => categorySections.flatMap((section) => section.items),
+    [categorySections]
+  );
 
   const {
     page, setPage, pageSize, setPageSize, pageItems, total, totalPages, from, to, listReturnTo,
@@ -225,10 +237,7 @@ export default function Ingredients() {
     [pageItems, categories]
   );
 
-  const exportGrouped = useMemo(
-    () => groupIngredientsByCategory(filtered, categories),
-    [filtered, categories]
-  );
+  const exportGrouped = categorySections;
 
   const renderActions = (i) => (
     <td className="row-actions">
