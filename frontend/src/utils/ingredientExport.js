@@ -1,4 +1,4 @@
-import { formatDate, formatMoney, formatWholeNumber } from "./format";
+import { formatDate, formatMoney, formatQuantity } from "./format";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -109,7 +109,7 @@ export async function exportIngredientsPdf({ items, grouped, filters = {} }) {
           <td>${escapeHtml(i.name || "—")}${i.is_secret ? " ★" : ""}${i.is_low_stock ? " (Low Stock)" : ""}</td>
           <td>${escapeHtml(i.supplier_name || "—")}</td>
           <td>${escapeHtml(i.batch_number || "—")}</td>
-          <td>${escapeHtml(`${i.quantity == null || i.quantity === "" ? "—" : formatWholeNumber(i.quantity)} ${i.unit || ""}`.trim())}</td>
+          <td>${escapeHtml(`${i.quantity == null || i.quantity === "" ? "—" : formatQuantity(i.quantity)} ${i.unit || ""}`.trim())}</td>
           <td>${escapeHtml(priceLabel(i))}</td>
           <td>${escapeHtml(i.created_at ? formatDate(i.created_at) : "—")}</td>
           <td>${escapeHtml(statusLabel(i))}</td>

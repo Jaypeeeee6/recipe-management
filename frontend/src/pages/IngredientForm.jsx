@@ -8,7 +8,7 @@ import Modal from "../components/Modal";
 import { useReturnTo } from "../components/Pagination";
 import PhotoUpload, { uploadPendingPhoto } from "../components/PhotoUpload";
 import StatusBadge from "../components/StatusBadge";
-import { formatMoney, integerFieldValue, omrFieldValue, sanitizeIntegerInput, sanitizeOmrDecimalInput } from "../utils/format";
+import { formatMoney, omrFieldValue, quantityFieldValue, sanitizeOmrDecimalInput } from "../utils/format";
 import { canManageSecretAccess, canSeeSecrets, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
 import { apiErrorMessage, useDialogs } from "../dialogs/DialogsContext";
@@ -20,7 +20,7 @@ const empty = {
   batch_number: "",
   received_date: "",
   unit: "kg",
-  quantity: 0,
+  quantity: "",
   par_level: 0,
   price_per_unit: "",
   notes: "",
@@ -78,7 +78,7 @@ export default function IngredientForm() {
           shelf_life_days: d.shelf_life_days || "",
           alternative_ids: d.alternative_ids || [],
           secret_viewer_ids: d.secret_viewer_ids || [],
-          quantity: integerFieldValue(d.quantity),
+          quantity: quantityFieldValue(d.quantity),
           price_per_unit: omrFieldValue(d.price_per_unit),
         });
         setHistory(d.price_history || []);
@@ -409,10 +409,10 @@ export default function IngredientForm() {
             <input
               className="input"
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               autoComplete="off"
               value={form.quantity}
-              onChange={(e) => set("quantity", sanitizeIntegerInput(e.target.value))}
+              onChange={(e) => set("quantity", sanitizeOmrDecimalInput(e.target.value))}
             />
           </div>
           <div className="field">

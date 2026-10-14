@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
@@ -167,12 +169,25 @@ class PriceHistorySerializer(serializers.ModelSerializer):
         fields = ["id", "price", "recorded_at"]
 
 
+class TrimmedDecimalField(serializers.DecimalField):
+    """Serialize decimals without padded zeros (1.500 → "1.5", 60.000 → "60")."""
+
+    def to_representation(self, value):
+        if value is None:
+            return None
+        text = format(Decimal(value), "f")
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text or "0"
+
+
 class IngredientListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     supplier_name = serializers.CharField(source="supplier.company_name", read_only=True)
     expiry_status = serializers.CharField(read_only=True)
     days_to_expiry = serializers.IntegerField(read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
+    quantity = TrimmedDecimalField(max_digits=12, decimal_places=3)
 
     class Meta:
         model = Ingredient

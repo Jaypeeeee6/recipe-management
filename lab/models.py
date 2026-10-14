@@ -137,7 +137,7 @@ class Ingredient(models.Model):
     expiry_date = models.DateField(null=True, blank=True)
     received_date = models.DateField(null=True, blank=True)
     unit = models.CharField(max_length=20, default="kg")
-    quantity = models.PositiveIntegerField(default=0)
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     par_level = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     price_per_unit = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     notes = models.TextField(blank=True)

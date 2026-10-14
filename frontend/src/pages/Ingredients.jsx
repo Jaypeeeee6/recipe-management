@@ -8,7 +8,7 @@ import Skeleton from "../components/Skeleton";
 import StatusBadge from "../components/StatusBadge";
 import SecretBadge from "../components/SecretBadge";
 import OpenableThumb from "../components/OpenableThumb";
-import { formatDate, formatMoney, formatWholeNumber } from "../utils/format";
+import { formatDate, formatMoney, formatQuantity } from "../utils/format";
 import { exportIngredientsPdf } from "../utils/ingredientExport";
 import { canManageLabSettings, canWrite } from "../utils/roles";
 import { useAuth } from "../auth/AuthContext";
@@ -602,7 +602,7 @@ export default function Ingredients() {
                       </td>
                       <td>{i.supplier_name || "—"}</td>
                       <td>{i.batch_number || "—"}</td>
-                      <td>{formatWholeNumber(i.quantity)} {i.unit}</td>
+                      <td>{formatQuantity(i.quantity)} {i.unit}</td>
                       <td>
                         {i.price_per_unit != null && i.price_per_unit !== ""
                           ? <>{formatMoney(i.price_per_unit)}{i.unit ? <span className="hint"> / {i.unit}</span> : null}</>

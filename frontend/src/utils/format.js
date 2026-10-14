@@ -28,26 +28,42 @@ export function sanitizeOmrDecimalInput(raw) {
   return value;
 }
 
-/** Digits only — for stock quantity and other whole-number fields while typing. */
+/** Digits only — for whole-number fields while typing. */
 export function sanitizeIntegerInput(raw) {
   if (raw == null) return "";
   return String(raw).replace(/[^0-9]/g, "");
 }
 
-/** Load API quantity into a form field as a whole number (e.g. "10.000" → "10"). */
-export function integerFieldValue(value) {
+/** Strip trailing zeros from a decimal string (e.g. "1.500" → "1.5", "10.000" → "10"). */
+export function stripTrailingZeros(value) {
   if (value == null || value === "") return "";
-  const n = Number(String(value).replace(/,/g, ""));
-  if (!Number.isFinite(n)) return "";
-  return String(Math.trunc(n));
+  let s = String(value).replace(/,/g, "").trim();
+  if (!s || !s.includes(".")) return s;
+  return s.replace(/0+$/, "").replace(/\.$/, "");
 }
 
-/** Display stock quantity without decimal places. */
-export function formatWholeNumber(value) {
-  if (value == null || value === "") return "—";
-  const n = Number(String(value).replace(/,/g, ""));
-  if (!Number.isFinite(n)) return String(value);
-  return String(Math.trunc(n));
+function plainQuantity(value) {
+  if (value == null || value === "") return "";
+  const raw = String(value).replace(/,/g, "").trim();
+  if (!raw) return "";
+  if (/^-?\d+(\.\d+)?$/.test(raw)) {
+    const trimmed = stripTrailingZeros(raw);
+    return trimmed === "" || trimmed === "-" ? "0" : trimmed;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return "";
+  return stripTrailingZeros(n.toFixed(3)) || "0";
+}
+
+/** Load API quantity into a form field without padding zeros (e.g. "1.500" → "1.5"). */
+export function quantityFieldValue(value) {
+  return plainQuantity(value);
+}
+
+/** Display stock quantity with decimals when needed, without trailing zeros. */
+export function formatQuantity(value) {
+  const text = plainQuantity(value);
+  return text === "" ? "—" : text;
 }
 
 /** Preserve API decimal strings for form fields without rounding 1.200 down to 1.2. */
